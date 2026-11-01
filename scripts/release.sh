@@ -86,6 +86,6 @@ gh release create "$TAG" "$ZIP" \
     --title "MIDIstat $VERSION" \
     --notes-file "$NOTES" \
     --generate-notes \
-    "${DRAFT_FLAG[@]}"
+    ${DRAFT_FLAG[@]+"${DRAFT_FLAG[@]}"}  # bash 3.2 + set -u: empty array needs this form
 git fetch --quiet --tags origin
 echo "Done: $(gh release view "$TAG" --json url --jq .url)"
