@@ -71,6 +71,20 @@ final class MIDIMonitor {
     /// Number of MIDI outputs (destinations) currently online.
     var destinationCount: Int { Self.onlineDestinations().count }
 
+    /// MIDI outputs (destinations) currently online, with names.
+    var outputs: [MIDISource] {
+        Self.onlineDestinations().map { endpoint in
+            var uniqueID: MIDIUniqueID = 0
+            MIDIObjectGetIntegerProperty(endpoint, kMIDIPropertyUniqueID, &uniqueID)
+            return MIDISource(endpoint: endpoint, uniqueID: uniqueID, name: Self.displayName(of: endpoint))
+        }
+    }
+
+    /// Whether the input port is currently connected to this source.
+    func isConnected(_ source: MIDISource) -> Bool {
+        connected.contains(source.endpoint)
+    }
+
     /// MIDI panic: sends All Sound Off, Reset All Controllers and All Notes Off
     /// on all 16 channels to every MIDI output. Returns how many outputs got it.
     @discardableResult

@@ -3,7 +3,7 @@ import CoreMIDI
 import MIDIstatCore
 import ServiceManagement
 
-private enum Defaults {
+enum Defaults {
     static let inputUniqueID = "inputUniqueID"
     static let inputName = "inputName"
     static let showContinuousRealtime = "showContinuousRealtime"
@@ -12,50 +12,56 @@ private enum Defaults {
     static let showDeviceName = "showDeviceName"
     static let showLastNotes = "showLastNotes"
     static let lastNotesAlwaysOnTop = "lastNotesAlwaysOnTop"
+    static let lastNotesExtraLargeFont = "lastNotesExtraLargeFont"
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let recentCount = 10
     private static let activityDuration: TimeInterval = 1
 
-    private let defaults = UserDefaults.standard
-    private let monitor = MIDIMonitor()
-    private let store = EventStore()
+    let defaults = UserDefaults.standard
+    let monitor = MIDIMonitor()
+    let store = EventStore()
     private var statusItem: NSStatusItem!
-    private var startError: String?
-    private lazy var logWindow = LogWindowController(
+    var startError: String?
+    lazy var logWindow = LogWindowController(
         store: store,
         shownCategories: { [unowned self] in self.shownCategories },
         setCategory: { [unowned self] category, shown in self.setCategory(category, shown: shown) },
         onClear: { [unowned self] in self.clearLog() })
-    private lazy var lastNotesWindow: LastNotesWindowController = {
+    lazy var lastNotesWindow: LastNotesWindowController = {
         let controller = LastNotesWindowController(
-            alwaysOnTop: defaults.bool(forKey: Defaults.lastNotesAlwaysOnTop),
-            setAlwaysOnTop: { [unowned self] in self.defaults.set($0, forKey: Defaults.lastNotesAlwaysOnTop) })
+            settings: .init(alwaysOnTop: defaults.bool(forKey: Defaults.lastNotesAlwaysOnTop),
+                            extraLargeFont: defaults.bool(forKey: Defaults.lastNotesExtraLargeFont)),
+            saveSettings: { [unowned self] settings in
+                self.defaults.set(settings.alwaysOnTop, forKey: Defaults.lastNotesAlwaysOnTop)
+                self.defaults.set(settings.extraLargeFont, forKey: Defaults.lastNotesExtraLargeFont)
+            })
         // Closing the panel with its close button turns the option off.
         controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showLastNotes) }
         return controller
     }()
 
+    var controlServer: ControlServer?
     private var activeUntil = Date.distantPast
     private var activityTimer: Timer?
-    private var iconState: IconState?
+    var iconState: IconState?
 
     private var eventItems: [NSMenuItem] = []
     private var hiddenCountItem: NSMenuItem?
-    private var isMenuOpen = false
+    var isMenuOpen = false
 
     // MARK: - Settings
 
     /// Optional message categories shown in the event lists (menu and log window).
-    private var shownCategories: EventCategories {
+    var shownCategories: EventCategories {
         var shown: EventCategories = []
         if defaults.bool(forKey: Defaults.showContinuousRealtime) { shown.insert(.continuousRealtime) }
         if defaults.bool(forKey: Defaults.showAftertouch) { shown.insert(.aftertouch) }
         return shown
     }
 
-    private func setCategory(_ category: EventCategories, shown: Bool) {
+    func setCategory(_ category: EventCategories, shown: Bool) {
         let key = category == .aftertouch ? Defaults.showAftertouch : Defaults.showContinuousRealtime
         defaults.set(shown, forKey: key)
         logWindow.settingsDidChange()
@@ -63,8 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // These two affect only the menu list; the log window always shows both.
-    private var showTimestamp: Bool { defaults.bool(forKey: Defaults.showTimestamp) }
-    private var showDeviceName: Bool { defaults.bool(forKey: Defaults.showDeviceName) }
+    var showTimestamp: Bool { defaults.bool(forKey: Defaults.showTimestamp) }
+    var showDeviceName: Bool { defaults.bool(forKey: Defaults.showDeviceName) }
 
     // MARK: - Lifecycle
 
@@ -76,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Defaults.showAftertouch: false,
             Defaults.showLastNotes: false,
             Defaults.lastNotesAlwaysOnTop: true,
+            Defaults.lastNotesExtraLargeFont: false,
         ])
         NSApp.mainMenu = makeMainMenu()
 
@@ -98,6 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         updateIcon()
         if defaults.bool(forKey: Defaults.showLastNotes) { lastNotesWindow.show() }
+        startControlServer()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        controlServer?.stop()
     }
 
     /// Not visible (the app has no menu bar of its own), but provides the
@@ -146,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func clearLog() {
+    func clearLog() {
         store.clear()
         logWindow.settingsDidChange()
         if isMenuOpen { updateEventItems() }
@@ -165,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activityTimer = timer
     }
 
-    private func updateIcon() {
+    func updateIcon() {
         let state: IconState
         if !monitor.isListening {
             state = .noDevice
@@ -186,9 +198,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuDidClose(_ menu: NSMenu) { isMenuOpen = false }
     func menuNeedsUpdate(_ menu: NSMenu) { rebuildMenu() }
 
-    private func rebuildMenu() {
+    func rebuildMenu() {
         guard let menu = statusItem.menu else { return }
         menu.removeAllItems()
+
+        menu.addItem(disabledItem("MIDIstat \(Updater.currentVersion)"))
+        menu.addItem(.separator())
 
         if let startError {
             menu.addItem(disabledItem("MIDI unavailable: \(startError)"))
@@ -209,7 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Show Full Log…", #selector(showLog), key: "l"))
         let lastNotes = item("Show Last Notes", #selector(toggleLastNotes), key: "n")
         lastNotes.state = lastNotesWindow.isVisible ? .on : .off
-        lastNotes.toolTip = "A small window with the last \(LastNotesWindowController.noteCount) notes played, newest on the left."
+        lastNotes.toolTip = "A small window with the last notes played, newest on the left. Widen it to see more notes."
         menu.addItem(lastNotes)
 
         menu.addItem(.separator())
@@ -236,6 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(login)
 
         menu.addItem(.separator())
+        menu.addItem(item("Check for Updates…", #selector(checkForUpdates)))
         let panic = item("MIDI Panic", #selector(sendPanic), key: "p")
         let outputs = monitor.destinationCount
         panic.isEnabled = outputs > 0
@@ -246,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Quit MIDIstat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
-    private func updateEventItems() {
+    func updateEventItems() {
         let shown = shownCategories
         let events = Array(store.recent(Self.recentCount, including: shown))
         let font = NSFont.monospacedSystemFont(ofSize: NSFont.menuFont(ofSize: 0).pointSize, weight: .regular)
@@ -270,7 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func addInputItems(to menu: NSMenu) {
-        let all = item("Listen to All MIDI Inputs", #selector(selectAllInputs))
+        let all = item("Listen to All MIDI Inputs", #selector(selectAllInputs), key: "a")
         all.state = monitor.selection == .all ? .on : .off
         menu.addItem(all)
 
@@ -337,28 +353,102 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func selectAllInputs() {
-        defaults.removeObject(forKey: Defaults.inputUniqueID)
-        defaults.removeObject(forKey: Defaults.inputName)
-        monitor.selection = .all
-        updateIcon()
+        setInput(.all)
     }
 
     @objc private func selectInput(_ sender: NSMenuItem) {
         guard let source = sender.representedObject as? MIDISource else { return }
-        defaults.set(Int(source.uniqueID), forKey: Defaults.inputUniqueID)
-        defaults.set(source.name, forKey: Defaults.inputName)
-        monitor.selection = .source(uniqueID: source.uniqueID, name: source.name)
+        setInput(.source(uniqueID: source.uniqueID, name: source.name))
+    }
+
+    /// Selects the input(s) to listen to and remembers the choice.
+    func setInput(_ selection: InputSelection) {
+        switch selection {
+        case .all:
+            defaults.removeObject(forKey: Defaults.inputUniqueID)
+            defaults.removeObject(forKey: Defaults.inputName)
+        case let .source(uniqueID, name):
+            defaults.set(Int(uniqueID), forKey: Defaults.inputUniqueID)
+            defaults.set(name, forKey: Defaults.inputName)
+        }
+        monitor.selection = selection
         updateIcon()
+        if isMenuOpen { rebuildMenu() }
     }
 
     /// ⌘N: shows or hides the Last Notes panel; the choice is remembered.
     @objc private func toggleLastNotes() {
-        let show = !lastNotesWindow.isVisible
+        setLastNotesVisible(!lastNotesWindow.isVisible)
+    }
+
+    func setLastNotesVisible(_ show: Bool) {
         defaults.set(show, forKey: Defaults.showLastNotes)
         if show {
             lastNotesWindow.show()
         } else {
             lastNotesWindow.hide()
+        }
+    }
+
+    // MARK: - Updates
+
+    @objc private func checkForUpdates() {
+        Task { @MainActor in
+            let current = Updater.currentVersion
+            do {
+                let release = try await Updater.latestRelease()
+                NSApp.activateTakingFocus()
+                guard Updater.isNewer(release.version, than: current) else {
+                    let alert = NSAlert()
+                    alert.messageText = "You’re up to date"
+                    alert.informativeText = "MIDIstat \(current) is the latest version."
+                    alert.runModal()
+                    return
+                }
+                let alert = NSAlert()
+                alert.messageText = "MIDIstat \(release.version) is available"
+                let changes = Updater.changes(in: release.notes)
+                alert.informativeText = "You have version \(current)."
+                    + (changes.isEmpty ? "" : "\n\nChanges:\n\(changes)")
+                    + "\n\nUpgrade downloads the new version, replaces this one and restarts MIDIstat."
+                alert.addButton(withTitle: "Upgrade")
+                alert.addButton(withTitle: "Cancel")
+                if alert.runModal() == .alertFirstButtonReturn {
+                    await upgrade(to: release)
+                }
+            } catch {
+                showUpdateError("Could not check for updates", error, pageURL: nil)
+            }
+        }
+    }
+
+    @MainActor private func upgrade(to release: Updater.Release) async {
+        do {
+            let bundle = Bundle.main.bundleURL
+            guard bundle.pathExtension == "app", let identifier = Bundle.main.bundleIdentifier else {
+                throw Updater.UpdateError("Only the MIDIstat.app bundle can be updated.")
+            }
+            let newApp = try await Updater.downloadAndVerify(release, bundleIdentifier: identifier)
+            try Updater.install(newApp, replacing: bundle)
+            NSApp.terminate(nil)
+        } catch {
+            showUpdateError("Could not upgrade MIDIstat", error, pageURL: release.pageURL)
+        }
+    }
+
+    private func showUpdateError(_ title: String, _ error: Error, pageURL: URL?) {
+        NSApp.activateTakingFocus()
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = error.localizedDescription
+            + (pageURL == nil ? "" : "\n\nYou can download the new version from its release page.")
+        if pageURL != nil {
+            alert.addButton(withTitle: "Open Release Page")
+            alert.addButton(withTitle: "Close")
+        }
+        if alert.runModal() == .alertFirstButtonReturn, let pageURL {
+            NSWorkspace.shared.open(pageURL)
         }
     }
 
@@ -368,11 +458,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleOption(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }
-        let newValue = !defaults.bool(forKey: key)
+        setOption(key, !defaults.bool(forKey: key))
+    }
+
+    /// Sets one of the Bool options shown in the menu (a `Defaults` key).
+    func setOption(_ key: String, _ value: Bool) {
         switch key {
-        case Defaults.showContinuousRealtime: setCategory(.continuousRealtime, shown: newValue)
-        case Defaults.showAftertouch: setCategory(.aftertouch, shown: newValue)
-        default: defaults.set(newValue, forKey: key)
+        case Defaults.showContinuousRealtime: setCategory(.continuousRealtime, shown: value)
+        case Defaults.showAftertouch: setCategory(.aftertouch, shown: value)
+        default:
+            defaults.set(value, forKey: key)
+            if isMenuOpen { updateEventItems() }
         }
     }
 

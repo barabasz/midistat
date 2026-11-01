@@ -11,6 +11,11 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--export-icons
     }
 }
 
+// Command-line control of the running app: `MIDIstat ctl <command>` (see ControlServer.swift).
+if CommandLine.arguments.count >= 2, CommandLine.arguments[1] == "ctl" {
+    exit(ControlClient.run(Array(CommandLine.arguments.dropFirst(2))))
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
