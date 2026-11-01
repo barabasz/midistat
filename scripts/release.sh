@@ -72,6 +72,23 @@ MIDIstat then appears in the menu bar (there is no Dock icon). Requires macOS 14
 SHA-256 of the zip: \`$SHA256\`
 EOF
 
+# Changes: commit titles since the previous release tag (all commits for the first release).
+PREVIOUS_TAG="$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)"
+{
+    echo
+    echo "## Changes"
+    echo
+    git log --no-merges --reverse --format='- %s (%h)' ${PREVIOUS_TAG:+"$PREVIOUS_TAG..HEAD"}
+    if [[ -n "$PREVIOUS_TAG" ]]; then
+        echo
+        echo "**Full diff**: https://github.com/barabasz/midistat/compare/$PREVIOUS_TAG...$TAG"
+    fi
+} >> "$NOTES"
+
+echo
+echo "----- Release notes -----"
+cat "$NOTES"
+echo "-------------------------"
 echo
 echo "About to create GitHub release $TAG$([[ $DRAFT == 1 ]] && echo " (draft)") at $(git rev-parse --short HEAD) with $ZIP."
 if [[ $YES == 0 ]]; then
@@ -85,7 +102,6 @@ gh release create "$TAG" "$ZIP" \
     --target "$(git rev-parse HEAD)" \
     --title "MIDIstat $VERSION" \
     --notes-file "$NOTES" \
-    --generate-notes \
     ${DRAFT_FLAG[@]+"${DRAFT_FLAG[@]}"}  # bash 3.2 + set -u: empty array needs this form
 git fetch --quiet --tags origin
 echo "Done: $(gh release view "$TAG" --json url --jq .url)"
