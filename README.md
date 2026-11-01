@@ -6,9 +6,9 @@ MIDIstat has no Dock icon and no main window. It lives in the menu bar as a two-
 
 | Triangle | Meaning |
 |---|---|
-| **green** | a MIDI message was received within the last second |
-| **grey** | listening, but nothing has arrived for over a second |
-| **red** | not listening: there is no MIDI input, or the selected input is disconnected |
+| $\color{green}{▶}$ **green** | a MIDI message was received within the last second |
+| $\color{gray}{▶}$ **grey** | listening, but nothing has arrived for over a second |
+| $\color{red}{▶}$ **red** | not listening: there is no MIDI input, or the selected input is disconnected |
 
 The red state applies even if other devices are connected: when a specific input is selected and it disappears, MIDIstat is not listening to anything. It turns grey again automatically when the device comes back.
 
