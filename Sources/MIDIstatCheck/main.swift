@@ -133,6 +133,22 @@ func storeIsCapped() {
     expect(all.last?.kind == .controlChange(controller: 1, value: UInt8(999 % 128)))
 }
 
+func storeTracksAppendsAndClears() {
+    let store = EventStore(limit: 10)
+    let note = MIDIEvent.fromBytes(status: 0x90, data1: 60, data2: 100, date: date)!
+    let clock = MIDIEvent.fromBytes(status: 0xF8, data1: 0, data2: 0, date: date)!
+    for _ in 0..<5 { store.append(note); store.append(clock) }
+    expect(store.appendedCount(including: []) == 5)
+    expect(store.appendedCount(including: .continuousRealtime) == 10)
+    // Trimming keeps counting, so a viewer sees that rows were dropped at the front.
+    for _ in 0..<20 { store.append(note) }
+    expect(store.appendedCount(including: []) == 25)
+    expect(store.events(including: []).count < 25)
+    let generation = store.generation
+    store.clear()
+    expect(store.generation == generation + 1 && store.appendedCount(including: []) == 0)
+}
+
 let tests: [(String, () -> Void)] = [
     ("noteOnMatchesSpecExample", noteOnMatchesSpecExample),
     ("noteOnWithZeroVelocityIsNoteOff", noteOnWithZeroVelocityIsNoteOff),
@@ -145,6 +161,7 @@ let tests: [(String, () -> Void)] = [
     ("lineOptions", lineOptions),
     ("storeFilters", storeFilters),
     ("storeIsCapped", storeIsCapped),
+    ("storeTracksAppendsAndClears", storeTracksAppendsAndClears),
 ]
 for (name, test) in tests { currentTest = name; test() }
 print(failures == 0 ? "All \(tests.count) checks passed." : "\(failures) failure(s).")

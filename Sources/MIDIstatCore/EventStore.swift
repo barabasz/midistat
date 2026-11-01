@@ -32,12 +32,18 @@ public final class EventStore {
     public let limit: Int
 
     private var views: [[MIDIEvent]]
+    /// Events ever appended to each view since the last clear (not reduced by trimming).
+    private var appendedCounts: [Int]
     private var hiddenCounts: [EventCategories: Int] = [:]
+
+    /// Incremented by `clear()`, so a viewer can tell that its rows are stale.
+    public private(set) var generation = 0
 
     /// `limit` caps memory use: devices sending Clock produce ~50 messages per second.
     public init(limit: Int = 100_000) {
         self.limit = limit
         views = Array(repeating: [], count: EventCategories.all.rawValue + 1)
+        appendedCounts = Array(repeating: 0, count: views.count)
     }
 
     public func append(_ event: MIDIEvent) {
@@ -45,6 +51,7 @@ public final class EventStore {
         if !category.isEmpty { hiddenCounts[category, default: 0] += 1 }
         for raw in views.indices where EventCategories(rawValue: raw).isSuperset(of: category) {
             views[raw].append(event)
+            appendedCounts[raw] += 1
             // Trim in chunks so that removing from the front stays cheap.
             if views[raw].count > limit + max(1, limit / 10) {
                 views[raw].removeFirst(views[raw].count - limit)
@@ -55,6 +62,12 @@ public final class EventStore {
     /// Events, oldest first, including only the given optional categories.
     public func events(including shown: EventCategories) -> [MIDIEvent] {
         views[shown.intersection(.all).rawValue]
+    }
+
+    /// How many events were ever appended to this view since the last clear.
+    /// Lets a viewer tell "only new events at the end" apart from "trimmed or cleared".
+    public func appendedCount(including shown: EventCategories) -> Int {
+        appendedCounts[shown.intersection(.all).rawValue]
     }
 
     public func recent(_ count: Int, including shown: EventCategories) -> ArraySlice<MIDIEvent> {
@@ -80,6 +93,8 @@ public final class EventStore {
 
     public func clear() {
         for raw in views.indices { views[raw].removeAll() }
+        appendedCounts = Array(repeating: 0, count: views.count)
         hiddenCounts.removeAll()
+        generation += 1
     }
 }
