@@ -12,7 +12,7 @@ extension AppDelegate {
         "devices                        MIDI inputs and outputs seen by MIDIstat",
         "updates                        check GitHub for a newer release (does not install it)",
         "events [N]                     the last N events as shown in the lists (default 10, max 1000)",
-        "set <option> <on|off|toggle>   options: timestamp, device-name, clock, aftertouch,",
+        "set <option> <on|off|toggle>   options: timestamp, device-name, channel, clock, aftertouch,",
         "                               notes-on-top, notes-xlarge, launch-at-login",
         "input all | input <name|ID>    listen to all inputs, or to one (exact name or unique ID)",
         "open <log|notes>               show a window (without taking the focus)",
@@ -27,6 +27,7 @@ extension AppDelegate {
     private static let listOptions: [String: String] = [
         "timestamp": Defaults.showTimestamp,
         "device-name": Defaults.showDeviceName,
+        "channel": Defaults.showChannel,
         "clock": Defaults.showContinuousRealtime,
         "aftertouch": Defaults.showAftertouch,
     ]

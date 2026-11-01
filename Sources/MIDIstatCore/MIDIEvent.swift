@@ -144,11 +144,11 @@ public enum MIDIFormat {
     /// e.g. `4.841, ch: 1, Note 079 On (G5), velocity: 93`, or with the source
     /// name: `4.841, Xkey Air 25, ch: 1, Note 079 On (G5), velocity: 93`.
     public static func line(for event: MIDIEvent, includeTimestamp: Bool = true, includeSource: Bool = false,
-                            calendar: Calendar = .current) -> String {
+                            includeChannel: Bool = true, calendar: Calendar = .current) -> String {
         var parts: [String] = []
         if includeTimestamp { parts.append(timestamp(event.date, calendar: calendar)) }
         if includeSource, let source = event.source { parts.append(source) }
-        if let channel = event.channel { parts.append("ch: \(channel)") }
+        if includeChannel, let channel = event.channel { parts.append("ch: \(channel)") }
         parts.append(description(of: event.kind))
         return parts.joined(separator: ", ")
     }

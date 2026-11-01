@@ -34,6 +34,7 @@ Click the icon to open the menu. Its first line shows the installed version, e.g
 - **Options**:
   - **Show Timestamp** (default on): show the timestamp in the menu list.
   - **Show Device Name** (default on): show the input name in the menu list.
+  - **Show Channel** (default on): show the MIDI channel (`ch: 1`) in the menu list.
   - **Show Clock & Active Sensing** (default off): include these real-time messages in the event lists.
   - **Show Aftertouch** (default off): include poly pressure and channel pressure in the event lists.
   - **Launch at Login**: start MIDIstat automatically when you log in.
@@ -43,7 +44,7 @@ Click the icon to open the menu. Its first line shows the installed version, e.g
 - **MIDI Panic** (⌘P): sends *All Sound Off*, *Reset All Controllers* and *All Notes Off* on all 16 channels to every MIDI output, to silence hanging notes. It is disabled when there are no MIDI outputs. ⌘P also works while the log window has focus, and so do ⌘L and ⌘N.
 - **Quit MIDIstat** (⌘Q).
 
-Show Timestamp and Show Device Name affect only the menu list. The log window always shows both.
+Show Timestamp, Show Device Name and Show Channel affect only the menu list. The log window always shows all three.
 
 Show Clock & Active Sensing and Show Aftertouch affect both the menu list and the log window. Hidden messages **still turn the indicator green**; they are only left out of the lists. They are hidden by default because some devices send Clock (~50 per second) or Active Sensing (~3 per second) non-stop, and aftertouch produces a flood of messages while a key is held. Without the filter these would push the notes out of the list in a fraction of a second.
 
@@ -106,7 +107,7 @@ $MIDISTAT ctl events 5               # the last 5 events
 | `updates` | Checks GitHub for a newer release. Reports it, does not install it. |
 | `status` | Indicator state, selected input, available inputs and outputs, all options, which windows are open, event counts. |
 | `events [N]` | The last N events (default 10, max 1000) as shown in the lists: time, device, channel, message. |
-| `set <option> <on\|off\|toggle>` | Options: `timestamp`, `device-name`, `clock`, `aftertouch`, `notes-on-top`, `notes-xlarge`, `launch-at-login`. |
+| `set <option> <on\|off\|toggle>` | Options: `timestamp`, `device-name`, `channel`, `clock`, `aftertouch`, `notes-on-top`, `notes-xlarge`, `launch-at-login`. |
 | `input all` / `input <name or ID>` | Listen to all inputs, or to one: its exact name (as in `status`) or unique ID. |
 | `open <log\|notes>` / `close <log\|notes>` | Show or hide a window. Opening does not take the focus away from the app you are using. |
 | `clear-log` | Clear the event history, the same as **Clear Log**. |

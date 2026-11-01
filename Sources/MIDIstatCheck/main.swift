@@ -87,6 +87,9 @@ func lineOptions() {
     expect(MIDIFormat.line(for: e, includeTimestamp: false, includeSource: true, calendar: utc)
         == "Xkey Air 25, ch: 1, Note 079 On (G5), velocity: 93")
     expect(MIDIFormat.line(for: e, includeTimestamp: false) == "ch: 1, Note 079 On (G5), velocity: 93")
+    expect(MIDIFormat.line(for: e, includeChannel: false, calendar: utc) == "4.841, Note 079 On (G5), velocity: 93")
+    expect(MIDIFormat.line(for: e, includeTimestamp: false, includeSource: true, includeChannel: false)
+        == "Xkey Air 25, Note 079 On (G5), velocity: 93")
     let parsed = UMPParser.parse(words: [0x2090_4F5D], date: date, source: "Xkey Air 25")
     expect(parsed.first?.source == "Xkey Air 25")
 }

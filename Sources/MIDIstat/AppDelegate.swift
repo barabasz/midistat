@@ -10,6 +10,7 @@ enum Defaults {
     static let showAftertouch = "showAftertouch"
     static let showTimestamp = "showTimestamp"
     static let showDeviceName = "showDeviceName"
+    static let showChannel = "showChannel"
     static let showLastNotes = "showLastNotes"
     static let lastNotesAlwaysOnTop = "lastNotesAlwaysOnTop"
     static let lastNotesExtraLargeFont = "lastNotesExtraLargeFont"
@@ -68,9 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if isMenuOpen { updateEventItems() }
     }
 
-    // These two affect only the menu list; the log window always shows both.
+    // These affect only the menu list; the log window always shows all of them.
     var showTimestamp: Bool { defaults.bool(forKey: Defaults.showTimestamp) }
     var showDeviceName: Bool { defaults.bool(forKey: Defaults.showDeviceName) }
+    var showChannel: Bool { defaults.bool(forKey: Defaults.showChannel) }
 
     // MARK: - Lifecycle
 
@@ -78,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         defaults.register(defaults: [
             Defaults.showTimestamp: true,
             Defaults.showDeviceName: true,
+            Defaults.showChannel: true,
             Defaults.showContinuousRealtime: false,
             Defaults.showAftertouch: false,
             Defaults.showLastNotes: false,
@@ -237,6 +240,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                 tip: "Show the seconds.milliseconds timestamp in the list above."))
         menu.addItem(toggleItem("Show Device Name", key: Defaults.showDeviceName,
                                 tip: "Show which MIDI input each event came from in the list above."))
+        menu.addItem(toggleItem("Show Channel", key: Defaults.showChannel,
+                                tip: "Show the MIDI channel (ch: 1–16) in the list above."))
         menu.addItem(toggleItem("Show Clock & Active Sensing", key: Defaults.showContinuousRealtime,
                                 tip: "Some devices send these continuously. When hidden, they still light the indicator but are left out of the event lists."))
         menu.addItem(toggleItem("Show Aftertouch", key: Defaults.showAftertouch,
@@ -269,7 +274,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (index, item) in eventItems.enumerated() {
             let text: String
             if index < events.count {
-                text = MIDIFormat.line(for: events[index], includeTimestamp: showTimestamp, includeSource: showDeviceName)
+                text = MIDIFormat.line(for: events[index], includeTimestamp: showTimestamp,
+                                      includeSource: showDeviceName, includeChannel: showChannel)
             } else if index == 0 && events.isEmpty {
                 text = "No MIDI events yet"
             } else {
