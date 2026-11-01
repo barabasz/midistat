@@ -32,6 +32,7 @@ final class MIDIMonitor {
     private var connected: [MIDIEndpointRef] = []
     private var client = MIDIClientRef()
     private var port = MIDIPortRef()
+    private var outputPort = MIDIPortRef()
 
     /// Source names by unique ID, read from the CoreMIDI receive thread.
     private let namesLock = NSLock()
@@ -61,7 +62,39 @@ final class MIDIMonitor {
         }
         guard status == noErr else { throw MIDIError(status: status) }
 
+        status = MIDIOutputPortCreate(client, "MIDIstat Output" as CFString, &outputPort)
+        guard status == noErr else { throw MIDIError(status: status) }
+
         reconnect()
+    }
+
+    /// Number of MIDI outputs (destinations) currently online.
+    var destinationCount: Int { Self.onlineDestinations().count }
+
+    /// MIDI panic: sends All Sound Off, Reset All Controllers and All Notes Off
+    /// on all 16 channels to every MIDI output. Returns how many outputs got it.
+    @discardableResult
+    func sendPanic() -> Int {
+        guard outputPort != 0 else { return 0 }
+        var words: [UInt32] = []
+        for channel in UInt32(0)..<16 {
+            for controller: UInt32 in [120, 121, 123] {
+                // UMP message type 2 (MIDI 1.0 channel voice): Control Change, value 0.
+                words.append(0x2000_0000 | (0xB0 | channel) << 16 | controller << 8)
+            }
+        }
+        var sent = 0
+        for destination in Self.onlineDestinations() {
+            var list = MIDIEventList()
+            var packet = MIDIEventListInit(&list, ._1_0)
+            for word in words {
+                packet = withUnsafePointer(to: word) {
+                    MIDIEventListAdd(&list, MemoryLayout<MIDIEventList>.size, packet, 0, 1, $0)
+                }
+            }
+            if MIDISendEventList(outputPort, destination, &list) == noErr { sent += 1 }
+        }
+        return sent
     }
 
     /// Re-reads the list of sources and connects the port to the selected one(s).
@@ -86,6 +119,16 @@ final class MIDIMonitor {
     }
 
     // MARK: - Helpers
+
+    private static func onlineDestinations() -> [MIDIEndpointRef] {
+        (0..<MIDIGetNumberOfDestinations()).compactMap { index in
+            let endpoint = MIDIGetDestination(index)
+            guard endpoint != 0 else { return nil }
+            var offline: Int32 = 0
+            MIDIObjectGetIntegerProperty(endpoint, kMIDIPropertyOffline, &offline)
+            return offline == 0 ? endpoint : nil
+        }
+    }
 
     /// The connection refCon carries the source's unique ID (never a null pointer).
     private static func refCon(for uniqueID: MIDIUniqueID) -> UnsafeMutableRawPointer? {

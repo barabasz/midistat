@@ -34,6 +34,7 @@ Click the icon to open the menu:
   - **Show Clock & Active Sensing** (default off): include these real-time messages in the event lists.
   - **Show Aftertouch** (default off): include poly pressure and channel pressure in the event lists.
   - **Launch at Login**: start MIDIstat automatically when you log in.
+- **MIDI Panic** (⌘P): sends *All Sound Off*, *Reset All Controllers* and *All Notes Off* on all 16 channels to every MIDI output, to silence hanging notes. It is disabled when there are no MIDI outputs, and also works with ⌘P while the log window has focus.
 - **Quit MIDIstat** (⌘Q).
 
 Show Timestamp and Show Device Name affect only the menu list. The log window always shows both.

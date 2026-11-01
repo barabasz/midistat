@@ -88,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Not visible (the app has no menu bar of its own), but provides the
-    /// usual shortcuts in the log window: ⌘C, ⌘A, ⌘L (close the log), ⌘W, ⌘M, ⌘Q.
+    /// usual shortcuts in the log window: ⌘C, ⌘A, ⌘L (close the log), ⌘P (MIDI panic), ⌘W, ⌘M, ⌘Q.
     private func makeMainMenu() -> NSMenu {
         let main = NSMenu()
         func submenu(_ title: String, _ items: [NSMenuItem]) {
@@ -105,6 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ])
         let toggleLog = NSMenuItem(title: "Toggle Full Log", action: #selector(toggleLog), keyEquivalent: "l")
         toggleLog.target = self
+        let panic = NSMenuItem(title: "MIDI Panic", action: #selector(sendPanic), keyEquivalent: "p")
+        panic.target = self
+        submenu("MIDI", [panic])
         submenu("Window", [
             toggleLog,
             NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"),
@@ -210,6 +213,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(login)
 
         menu.addItem(.separator())
+        let panic = item("MIDI Panic", #selector(sendPanic), key: "p")
+        let outputs = monitor.destinationCount
+        panic.isEnabled = outputs > 0
+        panic.toolTip = outputs > 0
+            ? "Sends All Sound Off, Reset All Controllers and All Notes Off on all 16 channels to every MIDI output (\(outputs) now)."
+            : "No MIDI outputs found."
+        menu.addItem(panic)
         menu.addItem(NSMenuItem(title: "Quit MIDIstat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
@@ -316,6 +326,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         defaults.set(source.name, forKey: Defaults.inputName)
         monitor.selection = .source(uniqueID: source.uniqueID, name: source.name)
         updateIcon()
+    }
+
+    @objc private func sendPanic() {
+        monitor.sendPanic()
     }
 
     @objc private func toggleOption(_ sender: NSMenuItem) {

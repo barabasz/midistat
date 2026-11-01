@@ -60,3 +60,9 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Build output of scripts/build-app.sh
+build/
+
+# macOS
+.DS_Store
