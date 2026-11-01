@@ -21,4 +21,4 @@ MIDIstat is a pure Swift Package with three targets, no third-party dependencies
 
 UserDefaults keys: `inputUniqueID` and `inputName` (absent = all inputs), `showTimestamp`, `showDeviceName`, `showContinuousRealtime`, `showAftertouch`.
 
-Go back to [README.md].
+Go back to [README.md](README.md).
