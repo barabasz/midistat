@@ -13,10 +13,13 @@ midistat/
 │   ├── MIDIstat/                  the menu bar app
 │   │   ├── main.swift
 │   │   ├── AppDelegate.swift
+│   │   ├── AppDelegate+Control.swift
+│   │   ├── ControlServer.swift
 │   │   ├── MIDIMonitor.swift
 │   │   ├── LogWindowController.swift
 │   │   ├── LastNotesWindowController.swift
 │   │   ├── StatusIcon.swift
+│   │   ├── Updater.swift
 │   │   └── Activation.swift
 │   └── MIDIstatCheck/             self-checks for MIDIstatCore
 │       └── main.swift
@@ -34,12 +37,15 @@ midistat/
 | `MIDIEvent.swift` | The decoded MIDI message model and its text formatting (note names, timestamps, list lines). |
 | `UMPParser.swift` | Turns Universal MIDI Packets, the format CoreMIDI delivers, into events. |
 | `EventStore.swift` | The event history behind the menu list and the log window, including the hideable message categories. |
-| `main.swift` (app) | Entry point. Starts the app without a Dock icon. A build-time flag renders the app icon instead. |
+| `main.swift` (app) | Entry point. Starts the app without a Dock icon, or runs the `ctl` client, or (a build-time flag) renders the app icon. |
 | `AppDelegate.swift` | Ties everything together: status item, menu, settings, the activity indicator, Launch at Login, MIDI panic. |
+| `AppDelegate+Control.swift` | The commands of the command-line control API: reading the state and changing it. |
+| `ControlServer.swift` | The local control channel: a socket server in the app and the `ctl` client in the same binary. |
 | `MIDIMonitor.swift` | The only code that talks to CoreMIDI: receiving from inputs, tracking devices, sending panic to outputs. |
 | `LogWindowController.swift` | The full log window. |
 | `LastNotesWindowController.swift` | The Last Notes window: the most recent notes in large type, animated. |
 | `StatusIcon.swift` | Draws the MI / ▶I mark, both for the menu bar and for the app icon. |
+| `Updater.swift` | Checks GitHub Releases for a newer version, verifies the download and swaps the app bundle in place. |
 | `Activation.swift` | Brings the app to the front when one of its windows opens. |
 | `main.swift` (check) | Self-checks for `MIDIstatCore` (`swift run MIDIstatCheck`). |
 | `Info.plist` | Bundle metadata, including "no Dock icon". |
@@ -61,11 +67,15 @@ A single timer, which also runs while the menu is open, switches green back to g
 
 **Filtering, not dropping.** Some messages arrive in floods: Clock, Active Sensing, aftertouch. They always light the indicator and are always recorded, but the user decides whether the lists show them. The history keeps a separate list for each combination of filters, so switching a filter is instant, and it counts what is hidden. Its size is capped so that a continuous stream cannot exhaust memory.
 
-**Menu and log window.** The menu is rebuilt each time it opens. While it is open, its event lines update live. The log window reads the same history, reloads at a limited rate and follows new events when scrolled to the bottom. A hidden main menu supplies the standard keyboard shortcuts while the window has focus. A menu bar app is not normally active, so opening a window explicitly takes over the focus.
+**Menu and log window.** The menu is rebuilt each time it opens. While it is open, its event lines update live. The log window reads the same history and updates at a limited rate. It inserts only the new rows and rebuilds the table only after a filter change, a clear or trimming, because rebuilding it while MIDI streams in is expensive. It follows new events when scrolled to the bottom. A hidden main menu supplies the standard keyboard shortcuts while the window has focus. A menu bar app is not normally active, so opening a window explicitly takes over the focus.
 
-**Last Notes window.** A non-activating panel. It shows only key presses and never takes the focus, so the user can keep working in another app. Notes occupy fixed-width slots, so a new note shifts all the others by the same distance. The movement is an eased view animation, skipped when the system asks to reduce motion.
+**Last Notes window.** A non-activating panel. It shows only key presses and never takes the focus, so the user can keep working in another app. Each note is drawn by a small custom view: letter, plus a column with the sharp sign above and the octave below. Notes occupy fixed-width slots, so a new note shifts all the others by the same distance. The window can only be resized horizontally. The number of visible notes follows from its width, and a short note history fills newly uncovered slots. The font size option changes the slot size and the window height. The movement is an eased view animation, skipped when the system asks to reduce motion. "Always on top" controls both the window level and its Space behaviour. On top, the window joins all Spaces and full-screen apps. Otherwise it is a normal window that belongs to one Space.
 
 **MIDI panic.** Sends "all sound off", "reset all controllers" and "all notes off" on every channel to every MIDI output. Hanging notes are usually stuck in a synth, not in the controller being monitored.
+
+**Command-line control.** The app binary is also its own client: `MIDIstat ctl <command>` connects to the running instance through a Unix domain socket in the user's Application Support folder, readable only by that user, and prints the JSON reply. Requests are handled on the main thread through the same functions the menu uses, so the effect is identical to clicking. A local socket was chosen over a localhost HTTP server, which web pages could reach, and over AppleScript, which needs more infrastructure.
+
+**Updates.** The latest release is read from the GitHub API. Before anything is replaced, the downloaded zip is checked against GitHub's SHA-256 digest, and the unpacked app against the expected bundle identifier, version and code signature. The running app cannot replace itself safely, so it starts a small detached shell script and quits. The script waits for the old process to exit, swaps the bundle (restoring the old one if the swap fails) and launches the new version. Settings live in `UserDefaults`, so they are kept.
 
 **Settings.** Stored in `UserDefaults`, with defaults registered at launch. Launch at Login uses the system's login item service (`SMAppService`).
 
