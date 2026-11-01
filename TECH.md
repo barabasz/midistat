@@ -15,6 +15,7 @@ midistat/
 │   │   ├── AppDelegate.swift
 │   │   ├── MIDIMonitor.swift
 │   │   ├── LogWindowController.swift
+│   │   ├── LastNotesWindowController.swift
 │   │   ├── StatusIcon.swift
 │   │   └── Activation.swift
 │   └── MIDIstatCheck/             self-checks for MIDIstatCore
@@ -37,6 +38,7 @@ midistat/
 | `AppDelegate.swift` | Ties everything together: status item, menu, settings, the activity indicator, Launch at Login, MIDI panic. |
 | `MIDIMonitor.swift` | The only code that talks to CoreMIDI: receiving from inputs, tracking devices, sending panic to outputs. |
 | `LogWindowController.swift` | The full log window. |
+| `LastNotesWindowController.swift` | The Last Notes window: the most recent notes in large type, animated. |
 | `StatusIcon.swift` | Draws the MI / ▶I mark, both for the menu bar and for the app icon. |
 | `Activation.swift` | Brings the app to the front when one of its windows opens. |
 | `main.swift` (check) | Self-checks for `MIDIstatCore` (`swift run MIDIstatCheck`). |
@@ -60,6 +62,8 @@ A single timer, which also runs while the menu is open, switches green back to g
 **Filtering, not dropping.** Some messages arrive in floods: Clock, Active Sensing, aftertouch. They always light the indicator and are always recorded, but the user decides whether the lists show them. The history keeps a separate list for each combination of filters, so switching a filter is instant, and it counts what is hidden. Its size is capped so that a continuous stream cannot exhaust memory.
 
 **Menu and log window.** The menu is rebuilt each time it opens. While it is open, its event lines update live. The log window reads the same history, reloads at a limited rate and follows new events when scrolled to the bottom. A hidden main menu supplies the standard keyboard shortcuts while the window has focus. A menu bar app is not normally active, so opening a window explicitly takes over the focus.
+
+**Last Notes window.** A non-activating panel. It shows only key presses and never takes the focus, so the user can keep working in another app. Notes occupy fixed-width slots, so a new note shifts all the others by the same distance. The movement is an eased view animation, skipped when the system asks to reduce motion.
 
 **MIDI panic.** Sends "all sound off", "reset all controllers" and "all notes off" on every channel to every MIDI output. Hanging notes are usually stuck in a synth, not in the controller being monitored.
 

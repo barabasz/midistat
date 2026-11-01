@@ -27,6 +27,7 @@ Click the icon to open the menu:
   ```
   If some message types are hidden (see Options), a line such as `Hidden: 120 Clock / Active Sensing, 3400 Aftertouch` shows how many were left out.
 - **Show Full Log…** (⌘L): opens the log window (see below).
+- **Show Last Notes** (⌘N, default off): shows or hides the Last Notes window (see below).
 - **MIDI Input**:
   - **Listen to All MIDI Inputs**, or
   - one specific input. Inputs are listed live as devices are connected and disconnected. A selected input that is currently unplugged appears as `Name (disconnected)`.
@@ -36,7 +37,7 @@ Click the icon to open the menu:
   - **Show Clock & Active Sensing** (default off): include these real-time messages in the event lists.
   - **Show Aftertouch** (default off): include poly pressure and channel pressure in the event lists.
   - **Launch at Login**: start MIDIstat automatically when you log in.
-- **MIDI Panic** (⌘P): sends *All Sound Off*, *Reset All Controllers* and *All Notes Off* on all 16 channels to every MIDI output, to silence hanging notes. It is disabled when there are no MIDI outputs, and also works with ⌘P while the log window has focus.
+- **MIDI Panic** (⌘P): sends *All Sound Off*, *Reset All Controllers* and *All Notes Off* on all 16 channels to every MIDI output, to silence hanging notes. It is disabled when there are no MIDI outputs. ⌘P also works while the log window has focus, and so do ⌘L and ⌘N.
 - **Quit MIDIstat** (⌘Q).
 
 Show Timestamp and Show Device Name affect only the menu list. The log window always shows both.
@@ -58,6 +59,19 @@ All settings, including the selected input, are remembered between launches.
 The window comes to the front when opened. While it has focus, **⌘L** closes it again. Selected rows can be copied with **⌘C** as tab-separated text, ready to paste into a spreadsheet. **⌘A** selects all rows.
 
 The log keeps up to the 100,000 most recent messages per view, which caps memory use when a device sends Clock all the time. The counter says so when the limit is reached.
+
+### Last Notes window
+
+**Show Last Notes** opens a small window, *MIDIstat — Last Notes*, with the last 5 notes played, in large type, for example **G**4 **C**4 **D**4 **A**5 **F♯**4. It is handy when learning: keep it open, press keys and see what you played.
+
+- The newest note appears on the left with a short slide-and-fade animation and pushes the older notes to the right. The oldest note slides out.
+- The newest note is shown at full contrast; the older ones are dimmed.
+- The note letter and ♯ are bold. The octave number is light, because it is secondary information. Middle C is C4.
+- Only key presses (Note On) are shown. Releases and other MIDI messages are ignored. Pressing the same key again adds it again.
+- **Always on Top** (default on) keeps the window above other apps, including full-screen ones.
+- The window never takes the focus away from the app you are using.
+- If the window is open when you quit MIDIstat, it opens again at the next launch. Closing it turns the option off.
+- With *Reduce motion* turned on in System Settings → Accessibility, notes appear without animation.
 
 ### Message format
 
@@ -95,7 +109,7 @@ swift run MIDIstatCheck              # runs the self-checks of the MIDI parsing/
 1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Support/Info.plist`, then commit and push.
 2. Run `./scripts/release.sh`.
 
-The script checks that `main` is clean and in sync with GitHub and that the version tag does not exist yet. It then runs the self-checks, builds the universal app and zips it into `build/MIDIstat-<version>.zip`. Finally it creates the GitHub release `v<version>` with installation notes, the zip's SHA-256 and auto-generated release notes. It requires the GitHub CLI (`gh`) to be logged in.
+The script checks that `main` is clean and in sync with GitHub and that the version tag does not exist yet. It then runs the self-checks, builds the universal app and zips it into `build/MIDIstat-<version>.zip`. Finally it shows the release notes and creates the GitHub release `v<version>`. The notes contain installation instructions, the zip's SHA-256, the list of commit titles since the previous release and a link to the full diff. It requires the GitHub CLI (`gh`) to be logged in.
 
 | Option | Effect |
 |---|---|

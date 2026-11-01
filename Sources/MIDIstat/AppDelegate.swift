@@ -10,6 +10,8 @@ private enum Defaults {
     static let showAftertouch = "showAftertouch"
     static let showTimestamp = "showTimestamp"
     static let showDeviceName = "showDeviceName"
+    static let showLastNotes = "showLastNotes"
+    static let lastNotesAlwaysOnTop = "lastNotesAlwaysOnTop"
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -26,6 +28,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shownCategories: { [unowned self] in self.shownCategories },
         setCategory: { [unowned self] category, shown in self.setCategory(category, shown: shown) },
         onClear: { [unowned self] in self.clearLog() })
+    private lazy var lastNotesWindow: LastNotesWindowController = {
+        let controller = LastNotesWindowController(
+            alwaysOnTop: defaults.bool(forKey: Defaults.lastNotesAlwaysOnTop),
+            setAlwaysOnTop: { [unowned self] in self.defaults.set($0, forKey: Defaults.lastNotesAlwaysOnTop) })
+        // Closing the panel with its close button turns the option off.
+        controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showLastNotes) }
+        return controller
+    }()
 
     private var activeUntil = Date.distantPast
     private var activityTimer: Timer?
@@ -64,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Defaults.showDeviceName: true,
             Defaults.showContinuousRealtime: false,
             Defaults.showAftertouch: false,
+            Defaults.showLastNotes: false,
+            Defaults.lastNotesAlwaysOnTop: true,
         ])
         NSApp.mainMenu = makeMainMenu()
 
@@ -85,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             startError = "\(error)"
         }
         updateIcon()
+        if defaults.bool(forKey: Defaults.showLastNotes) { lastNotesWindow.show() }
     }
 
     /// Not visible (the app has no menu bar of its own), but provides the
@@ -108,8 +121,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let panic = NSMenuItem(title: "MIDI Panic", action: #selector(sendPanic), keyEquivalent: "p")
         panic.target = self
         submenu("MIDI", [panic])
+        let toggleNotes = NSMenuItem(title: "Show Last Notes", action: #selector(toggleLastNotes), keyEquivalent: "n")
+        toggleNotes.target = self
         submenu("Window", [
             toggleLog,
+            toggleNotes,
             NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"),
             NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"),
         ])
@@ -125,6 +141,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateIcon()
         if isMenuOpen { updateEventItems() }
         logWindow.eventsDidChange()
+        if case let .noteOn(note, _) = event.kind, lastNotesWindow.isVisible {
+            lastNotesWindow.add(note: note)
+        }
     }
 
     private func clearLog() {
@@ -188,6 +207,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateEventItems()
 
         menu.addItem(item("Show Full Log…", #selector(showLog), key: "l"))
+        let lastNotes = item("Show Last Notes", #selector(toggleLastNotes), key: "n")
+        lastNotes.state = lastNotesWindow.isVisible ? .on : .off
+        lastNotes.toolTip = "A small window with the last \(LastNotesWindowController.noteCount) notes played, newest on the left."
+        menu.addItem(lastNotes)
 
         menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "MIDI Input"))
@@ -326,6 +349,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         defaults.set(source.name, forKey: Defaults.inputName)
         monitor.selection = .source(uniqueID: source.uniqueID, name: source.name)
         updateIcon()
+    }
+
+    /// ⌘N: shows or hides the Last Notes panel; the choice is remembered.
+    @objc private func toggleLastNotes() {
+        let show = !lastNotesWindow.isVisible
+        defaults.set(show, forKey: Defaults.showLastNotes)
+        if show {
+            lastNotesWindow.show()
+        } else {
+            lastNotesWindow.hide()
+        }
     }
 
     @objc private func sendPanic() {
