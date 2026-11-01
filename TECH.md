@@ -22,7 +22,8 @@ midistat/
 ├── Support/
 │   └── Info.plist
 └── scripts/
-    └── build-app.sh
+    ├── build-app.sh
+    └── release.sh
 ```
 
 ## Files
@@ -41,6 +42,7 @@ midistat/
 | `main.swift` (check) | Self-checks for `MIDIstatCore` (`swift run MIDIstatCheck`). |
 | `Info.plist` | Bundle metadata, including "no Dock icon". |
 | `build-app.sh` | Builds the `.app` bundle: release binary, icon, ad-hoc signature. |
+| `release.sh` | Publishes a GitHub Release with the zipped universal app. |
 
 ## Key concepts
 

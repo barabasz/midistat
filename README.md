@@ -66,19 +66,40 @@ Each line has the parts that are switched on: timestamp, device, channel, messag
 - **Notes**: zero-padded number plus name, with middle C = 60 = C4 (so 79 = G5). A *Note On with velocity 0*, which many keyboards send on key release, is shown as **Note Off**.
 - **Message types**: Note On/Off, Poly Pressure, Control Change (common controllers are named, e.g. `Control Change 064 (Sustain), value: 127`), Program Change (raw value 0–127), Channel Pressure, Pitch Bend (`-8192…+8191`, 0 = centre), SysEx, MTC Quarter Frame, Song Position, Song Select, Tune Request, Clock, Start, Continue, Stop, Active Sensing, System Reset.
 
-## Installing and building
+## Download
+
+Get the latest **MIDIstat-x.y.z.zip** from [Releases](https://github.com/barabasz/midistat/releases/latest). It runs on macOS 14 or later, on Apple silicon and Intel.
+
+1. Unzip the download (Safari does this automatically) and move **MIDIstat.app** to **Applications**.
+2. Open it. MIDIstat is not notarized by Apple, so the first time macOS blocks it. To allow it, either:
+   - open **System Settings → Privacy & Security**, scroll down, click **Open Anyway** next to the MIDIstat message and confirm, or
+   - run `xattr -dr com.apple.quarantine /Applications/MIDIstat.app` in Terminal.
+
+## Building from source
 
 Requirements: macOS 14 or later and the Xcode Command Line Tools (`xcode-select --install`). Full Xcode is not needed.
 
 ```sh
-./scripts/build-app.sh            # builds build/MIDIstat.app (release, with icon, ad-hoc signed)
-./scripts/build-app.sh --install  # also copies it to /Applications and (re)starts it
-swift run MIDIstatCheck           # runs the self-checks of the MIDI parsing/formatting logic
+./scripts/build-app.sh               # builds build/MIDIstat.app (release, with icon, ad-hoc signed)
+./scripts/build-app.sh --universal   # same, for Apple silicon + Intel
+./scripts/build-app.sh --install     # also copies it to /Applications and (re)starts it
+swift run MIDIstatCheck              # runs the self-checks of the MIDI parsing/formatting logic
 ```
 
 **Launch at Login** works most reliably when the app is in `/Applications` (use `--install`). If macOS asks for approval, the System Settings → General → Login Items pane opens; in the menu the option then shows a dash (–) until it is approved.
 
-The app is ad-hoc signed, not notarized. If macOS refuses to open a copy that was downloaded or moved from another Mac, right-click it and choose **Open**.
+## Publishing a release
+
+1. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Support/Info.plist`, then commit and push.
+2. Run `./scripts/release.sh`.
+
+The script checks that `main` is clean and in sync with GitHub and that the version tag does not exist yet. It then runs the self-checks, builds the universal app and zips it into `build/MIDIstat-<version>.zip`. Finally it creates the GitHub release `v<version>` with installation notes, the zip's SHA-256 and auto-generated release notes. It requires the GitHub CLI (`gh`) to be logged in.
+
+| Option | Effect |
+|---|---|
+| `--dry-run` | only build and package |
+| `--draft` | create the release as a draft |
+| `--yes` | skip the confirmation prompt |
 
 ## How it works (for developers and AI assistants)
 
