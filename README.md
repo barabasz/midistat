@@ -82,7 +82,7 @@ The app is ad-hoc signed, not notarized. If macOS refuses to open a copy that wa
 ## How it works (for developers and AI assistants)
 
 Swift Package with three targets, no third-party dependencies.
-For more details see: [TECH.md].
+For more details see: [TECH.md](TECH.md).
 
 ## License
 
