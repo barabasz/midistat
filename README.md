@@ -2,6 +2,8 @@
 
 A tiny native macOS menu bar app that shows, at a glance, whether MIDI data is arriving — and what it is.
 
+![MIDIstat menu bar app and MIDI event list](MIDIstat.png)
+
 MIDIstat has no Dock icon and no main window. It lives in the menu bar as a two-row **MI / ▶I** mark; the triangle is the indicator:
 
 | Triangle | Meaning |
@@ -82,7 +84,7 @@ Requirements: macOS 14 or later and the Xcode Command Line Tools (`xcode-select 
 ```sh
 ./scripts/build-app.sh               # builds build/MIDIstat.app (release, with icon, ad-hoc signed)
 ./scripts/build-app.sh --universal   # same, for Apple silicon + Intel
-./scripts/build-app.sh --install     # also copies it to /Applications and (re)starts it
+./scripts/build-app.sh --install     # replaces /Applications/MIDIstat.app and (re)starts it
 swift run MIDIstatCheck              # runs the self-checks of the MIDI parsing/formatting logic
 ```
 
