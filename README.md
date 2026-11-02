@@ -2,7 +2,7 @@
 
 A tiny native macOS menu bar app that shows, at a glance, whether MIDI data is arriving — and what it is.
 
-![MIDIstat menu bar app and MIDI event list](MIDIstat.png)
+![MIDIstat menu bar app and MIDI event list](MIDIstat.webp)
 
 MIDIstat has no Dock icon and no main window. It lives in the menu bar as a two-row **MI / ▶I** mark; the triangle is the indicator:
 
