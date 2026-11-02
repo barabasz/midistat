@@ -48,6 +48,7 @@ if [[ $INSTALL == 1 ]]; then
     pkill -x MIDIstat || true
     rm -rf /Applications/MIDIstat.app
     cp -R "$APP" /Applications/
-    open /Applications/MIDIstat.app
+    # Launch Services may not have registered the replaced app yet: retry once.
+    open /Applications/MIDIstat.app 2>/dev/null || { sleep 1; open /Applications/MIDIstat.app; }
     echo "Installed /Applications/MIDIstat.app"
 fi
