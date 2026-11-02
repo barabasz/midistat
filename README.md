@@ -18,51 +18,67 @@ The red state applies even if other devices are connected: when a specific input
 
 ### Menu
 
-Click the icon to open the menu. Its first line shows the installed version, e.g. *MIDIstat 0.6.0*.
+Click the icon to open the menu. Its first line shows the installed version, e.g. *MIDIstat 0.7.0*.
 
-- **Last 10 MIDI Events**: the most recent messages, oldest first, updated live while the menu is open. Example:
+- **Last MIDI Event**: the most recent message, updated live while the menu is open:
   ```
-  4.841, Xkey Air 25, ch: 1, Note 079 On (G5), velocity: 93
-  4.911, Xkey Air 25, ch: 1, Note 079 Off (G5), velocity: 0
+  Time: 14:03:22.841
+  Device: Xkey Air 25    Channel: 1
+  Event: Note 079 On (G5), velocity: 93
   ```
-  If some message types are hidden (see Options), a line such as `Hidden: 120 Clock / Active Sensing, 3400 Aftertouch` shows how many were left out.
-- **Show Full Log** (⌘L): shows or hides the log window (see below). It is checked while the window is open.
-- **Show Last Notes** (⌘N, default off): shows or hides the Last Notes window (see below).
+  It shows every kind of message, aftertouch included. This is the quick check whether an interface works at all, or whether a keyboard sends aftertouch: while a key is held you see its pressure value, after release the Note Off.
+  Below it, only while they arrive, MIDIstat shows two summaries (see [Clock and Active Sensing](#clock-and-active-sensing)):
+  ```
+  MIDI Clock: 120.0 BPM, running (Ableton Live)
+  Active Sensing: Yamaha P-125
+  ```
+- **Floating Windows**: **Show Full Log** (⌘L), **Show Last Events** (⌘E), **Show Last Notes** (⌘N) show or hide the three windows described below. Each item is checked while its window is open.
 - **MIDI Input**:
   - **Listen to All MIDI Inputs** (⌘A), or
   - one specific input. Inputs are listed live as devices are connected and disconnected. A selected input that is currently unplugged appears as `Name (disconnected)`.
 - **Options**:
-  - **Show Timestamp** (default on): show the timestamp in the menu list.
-  - **Show Device Name** (default on): show the input name in the menu list.
-  - **Show Channel** (default on): show the MIDI channel (`ch: 1`) in the menu list.
-  - **Show Clock & Active Sensing** (default off): include these real-time messages in the event lists.
-  - **Show Aftertouch** (default off): include poly pressure and channel pressure in the event lists.
-  - **Launch at Login**: start MIDIstat automatically when you log in.
-- **Check for Updates…**: asks GitHub for the latest release.
+  - **Launch at Login** (⌥L, hold Option while the menu is open): start MIDIstat automatically when you log in.
+- **Check for Updates…** (⌘U): asks GitHub for the latest release.
   - If you have the latest version, a dialog says so.
   - Otherwise a dialog shows the new version and what's new since your version, covering every release you skipped. It lists up to 5 changes, newest first, then *…and N more* with a **See all changes** link to GitHub's comparison of your version with the new one. The buttons are **Upgrade** and **Cancel**. **Upgrade** downloads the new version and checks it: GitHub's SHA-256 checksum, the app identifier, the version and the code signature. It then replaces the installed app in place, keeping your settings, and restarts MIDIstat. If something fails, the old version stays and you can open the release page.
-- **MIDI Panic** (⌘P): sends *All Sound Off*, *Reset All Controllers* and *All Notes Off* on all 16 channels to every MIDI output, to silence hanging notes. It is disabled when there are no MIDI outputs. ⌘P also works while the log window has focus, and so do ⌘L and ⌘N.
+- **MIDI Panic** (⌘P): sends *All Sound Off*, *Reset All Controllers* and *All Notes Off* on all 16 channels to every MIDI output, to silence hanging notes. It is disabled when there are no MIDI outputs.
 - **Quit MIDIstat** (⌘Q).
 
-Show Timestamp, Show Device Name and Show Channel affect only the menu list. The log window always shows all three.
+The window shortcuts ⌘L, ⌘E, ⌘N and ⌘P also work while one of MIDIstat's windows has focus. All settings, including the selected input, the windows' options and which windows are open, are remembered between launches.
 
-Show Clock & Active Sensing and Show Aftertouch affect both the menu list and the log window. Hidden messages **still turn the indicator green**; they are only left out of the lists. They are hidden by default because some devices send Clock (~50 per second) or Active Sensing (~3 per second) non-stop, and aftertouch produces a flood of messages while a key is held. Without the filter these would push the notes out of the list in a fraction of a second.
+### Windows
 
-All settings, including the selected input, are remembered between launches.
+Each window has its own options and its own **Always on Top** checkbox. With **Always on Top** on, the window floats above other windows, on every desktop (Space) and over full-screen apps. With it off, the window behaves like an ordinary window: it stays on the desktop where you left it and does not appear in full-screen apps. If you turn it off while a full-screen app is in front, the window hides there at once and reappears on the next regular desktop you switch to, so it never gets stuck in a full-screen app.
+
+**Aftertouch** (poly and channel pressure) is off by default in the windows that list events. Holding a key produces a flood of these messages, which would push the notes out of view. Hidden messages still turn the indicator green.
+
+### Last Events window
+
+**Show Last Events** opens a compact text window, *MIDIstat — Last Events*, with the most recent events, newest at the bottom. It updates the moment an event arrives:
+
+```
+ 2.140  Xkey Air 25   ch: 1  Note 069 Off (A4), velocity: 0
+ 2.340  Xkey Air 25   ch: 1  Note 071 On (B4), velocity: 90
+```
+
+- Options: **Timestamp** (seconds and milliseconds within the minute), **Device Name**, **Channel**, **Aftertouch**, **Always on Top**, and a **Clear Log** button (it clears the shared history: Last Events, the log and the menu).
+- Turning a column on or off sets the width to fit all columns. You can then make the window narrower, and long descriptions end with "…", or wider. The height can be changed too: at least 5 lines, up to the screen height, and more lines show more events.
+- The window never takes the focus away from the app you are using. If it is open when you quit MIDIstat, it opens again at the next launch.
 
 ### Log window
 
-**Show Full Log** opens a resizable window (it can also be zoomed or made full screen) that lists every message since MIDIstat started, or since the log was last cleared:
+**Show Full Log** opens a resizable window (it can also be zoomed or made full screen) with a table of every message since MIDIstat started, or since the log was last cleared:
 
-- columns **Time** (`HH:mm:ss.SSS`), **Device**, **Ch**, **Message**;
-- **Show Clock & Active Sensing** and **Show Aftertouch** checkboxes. These are the same settings as in the menu;
+- a **filter** field at the top (⌘F). Type one or more words, and only rows containing all of them stay, in any column and ignoring case. For example, `d4 on` shows Note On events of D4, `xkey 064` events from the Xkey with controller or note 064, `ch 2` events on channel 2. New events that match keep appearing;
+- columns **Time** (`HH:mm:ss.SSS`), **Device**, **Ch**, **Message** and **Value** (velocity, controller value, pressure, pitch bend; empty for messages without one);
+- **Aftertouch** and **Always on Top** checkboxes;
 - an event counter, including how many messages are hidden;
-- **Clear Log** clears the log window and the menu list;
-- **Close** (or Esc).
+- **Clear Log** clears the history: the log, Last Events and the menu;
+- **Close** (or Esc; while typing in the filter, Esc clears it first).
 
-The window comes to the front when opened. While it has focus, **⌘L** closes it again. Selected rows can be copied with **⌘C** as tab-separated text, ready to paste into a spreadsheet. **⌘A** selects all rows.
+The window comes to the front when opened. While it has focus, **⌘L** closes it again. Selected rows can be copied with **⌘C** as tab-separated text, ready to paste into a spreadsheet. **⌘A** selects all rows. After a quiet moment, a new event appears at once. While MIDI streams in (fast passages, aftertouch), the table updates up to 10 times per second, so lines may arrive in pairs. Updating a table costs far more than the text of Last Events, so for a truly instant view use Last Events.
 
-The log keeps up to the 100,000 most recent messages per view, which caps memory use when a device sends Clock all the time. The counter says so when the limit is reached.
+The log keeps up to the 100,000 most recent messages. The counter says so when the limit is reached.
 
 ### Last Notes window
 
@@ -71,13 +87,23 @@ The log keeps up to the 100,000 most recent messages per view, which caps memory
 - The newest note appears on the left with a short slide-and-fade animation and pushes the older notes to the right. The oldest note slides out.
 - The newest note is shown at full contrast; the older ones are dimmed.
 - Each note is a large bold letter with a small column to its right. The sharp sign, if any, is on top, level with the top of the letter. The octave number, in a light weight, is at the bottom, on the letter's baseline. Middle C is C4.
+- **Notes count**: how many keys were pressed since MIDIstat started (each Note On counts, also while the window is closed). **Reset** sets it back to 0, e.g. to count the notes in one exercise.
 - **Resizable horizontally**: by default the window shows 5 notes. Drag its edge to make it wider, up to the full screen width, and more notes fit. Notes played earlier appear at once. It cannot be made narrower than 5 notes, and the height is fixed.
 - **X-Large Font** (default off) doubles the size of the notes. The window grows taller and keeps showing the same number of notes, as long as they fit on the screen.
 - Only key presses (Note On) are shown. Releases and other MIDI messages are ignored. Pressing the same key again adds it again.
-- **Always on Top** (default on) keeps the window above other windows, on every desktop (Space) and over full-screen apps. When it is off, the window behaves like an ordinary window: it stays on the desktop where you left it and does not appear in full-screen apps.
+- **Always on Top** (default on), see [Windows](#windows).
 - The window never takes the focus away from the app you are using.
 - If the window is open when you quit MIDIstat, it opens again at the next launch, with the same position, width and options. Closing it turns the option off.
 - With *Reduce motion* turned on in System Settings → Accessibility, notes appear without animation.
+
+### Clock and Active Sensing
+
+Two kinds of MIDI messages carry no musical content and arrive continuously, so MIDIstat summarises them instead of listing them:
+
+- **MIDI Clock** synchronises tempo: a DAW, drum machine or sequencer sends 24 pulses per quarter note, 48 messages per second at 120 BPM. MIDIstat shows the tempo, whether the transport is running (Start / Stop / Continue) and the sending device. Start, Stop, Continue and Song Position are also listed as events.
+- **Active Sensing** is a "still connected" signal that some instruments, often digital pianos, send every ~300 ms. MIDIstat shows which devices send it.
+
+Both turn the indicator green. They appear in the menu, and in `ctl status`, only while they arrive. Ordinary controller keyboards send neither.
 
 ### Message format
 
@@ -95,7 +121,7 @@ The running app can be inspected and controlled from Terminal, scripts or AI ass
 ```sh
 MIDISTAT=/Applications/MIDIstat.app/Contents/MacOS/MIDIstat
 $MIDISTAT ctl status                 # the whole state as JSON
-$MIDISTAT ctl set aftertouch on      # change an option
+$MIDISTAT ctl set log-aftertouch on  # change an option
 $MIDISTAT ctl open notes             # show the Last Notes window
 $MIDISTAT ctl events 5               # the last 5 events
 ```
@@ -105,12 +131,13 @@ $MIDISTAT ctl events 5               # the last 5 events
 | `ver` | The installed version and build number. |
 | `devices` | The MIDI inputs (and whether MIDIstat is listening to each) and outputs that MIDIstat sees. |
 | `updates` | Checks GitHub for a newer release: the latest version, all changes since the installed one and a link to the full comparison. Does not install anything. |
-| `status` | Indicator state, selected input, available inputs and outputs, all options, which windows are open, event counts. |
-| `events [N]` | The last N events (default 10, max 1000) as shown in the lists: time, device, channel, message. |
-| `set <option> <on\|off\|toggle>` | Options: `timestamp`, `device-name`, `channel`, `clock`, `aftertouch`, `notes-on-top`, `notes-xlarge`, `launch-at-login`. |
+| `status` | Indicator state, selected input, available inputs and outputs, all options, which windows are open, MIDI Clock and Active Sensing, the notes count, event counts. |
+| `events [N]` | The last N events (default 10, max 1000), filtered like Last Events: time, device, channel, message. |
+| `set <option> <on\|off\|toggle>` | Options: `events-timestamp`, `events-device`, `events-channel`, `events-aftertouch`, `events-on-top`, `log-aftertouch`, `log-on-top`, `notes-on-top`, `notes-xlarge`, `launch-at-login`. |
 | `input all` / `input <name or ID>` | Listen to all inputs, or to one: its exact name (as in `status`) or unique ID. |
-| `open <log\|notes>` / `close <log\|notes>` | Show or hide a window. Opening does not take the focus away from the app you are using. |
+| `open <log\|events\|notes>` / `close …` | Show or hide a window. Opening does not take the focus away from the app you are using. |
 | `clear-log` | Clear the event history, the same as **Clear Log**. |
+| `reset-notes` | Reset the notes count in Last Notes. |
 | `panic` | Send MIDI Panic to all outputs. |
 | `help` | List the commands. |
 
@@ -144,7 +171,22 @@ Requirements: macOS 14 or later and the Xcode Command Line Tools (`xcode-select 
 ./scripts/build-app.sh --universal   # same, for Apple silicon + Intel
 ./scripts/build-app.sh --install     # replaces /Applications/MIDIstat.app and (re)starts it
 swift run MIDIstatCheck              # runs the self-checks of the MIDI parsing/formatting logic
+./scripts/benchmark.sh               # measures CPU and memory of the running app (see below)
 ```
+
+### Benchmark
+
+`./scripts/benchmark.sh` measures the CPU and memory use of the **running** MIDIstat (by default `/Applications/MIDIstat.app`). While it runs, virtual MIDI devices (`MIDIstatLoad`) play notes, aftertouch and MIDI Clock with Active Sensing, and the windows are switched through the control API. The result is a table per set of open windows:
+
+```
+Windows: events
+  load                                    CPU   memory
+  no MIDI                              0.00 %   35M
+  6 notes/s                            2.98 %   35M
+  16 notes/s                           5.64 %   35M
+```
+
+CPU is the average share of one core. Afterwards the windows that were open are reopened, and the event history and notes count are cleared if they were empty before. Options: `--quick` (fewer combinations); environment `RUN_SECONDS` (seconds per measurement, default 10) and `MIDISTAT_BIN` (another app binary). The windows open and close on screen while it runs. Use it after changes to the windows or the event handling, to compare with earlier results.
 
 **Launch at Login** works most reliably when the app is in `/Applications` (use `--install`). If macOS asks for approval, the System Settings → General → Login Items pane opens; in the menu the option then shows a dash (–) until it is approved.
 
