@@ -104,35 +104,44 @@ public enum MIDIFormat {
         String(format: "%03d", Int(value))
     }
 
-    public static func description(of kind: MIDIEventKind) -> String {
+    /// The message and, separately, its value (if it has one), e.g.
+    /// ("Note 079 On (G5)", ("velocity", "93")) or ("Control Change 064 (Sustain)", ("value", "127")).
+    /// The log window shows the value in its own column.
+    public static func parts(of kind: MIDIEventKind) -> (message: String, value: (name: String, text: String)?) {
         switch kind {
         case let .noteOn(note, velocity):
-            return "Note \(pad3(note)) On (\(noteName(note))), velocity: \(velocity)"
+            return ("Note \(pad3(note)) On (\(noteName(note)))", ("velocity", "\(velocity)"))
         case let .noteOff(note, velocity):
-            return "Note \(pad3(note)) Off (\(noteName(note))), velocity: \(velocity)"
+            return ("Note \(pad3(note)) Off (\(noteName(note)))", ("velocity", "\(velocity)"))
         case let .polyPressure(note, value):
-            return "Poly Pressure \(pad3(note)) (\(noteName(note))), value: \(value)"
+            return ("Poly Pressure \(pad3(note)) (\(noteName(note)))", ("value", "\(value)"))
         case let .controlChange(controller, value):
             let name = controllerNames[controller].map { " (\($0))" } ?? ""
-            return "Control Change \(pad3(controller))\(name), value: \(value)"
+            return ("Control Change \(pad3(controller))\(name)", ("value", "\(value)"))
         case let .programChange(program):
-            return "Program Change \(pad3(program))"
+            return ("Program Change \(pad3(program))", nil)
         case let .channelPressure(value):
-            return "Channel Pressure, value: \(value)"
+            return ("Channel Pressure", ("value", "\(value)"))
         case let .pitchBend(value):
-            return "Pitch Bend, value: \(value > 0 ? "+" : "")\(value)"
-        case .sysEx: return "SysEx"
-        case let .mtcQuarterFrame(value): return "MTC Quarter Frame, value: \(value)"
-        case let .songPosition(beats): return "Song Position, beat: \(beats)"
-        case let .songSelect(song): return "Song Select \(pad3(song))"
-        case .tuneRequest: return "Tune Request"
-        case .clock: return "Clock"
-        case .start: return "Start"
-        case .continue: return "Continue"
-        case .stop: return "Stop"
-        case .activeSensing: return "Active Sensing"
-        case .reset: return "System Reset"
+            return ("Pitch Bend", ("value", "\(value > 0 ? "+" : "")\(value)"))
+        case .sysEx: return ("SysEx", nil)
+        case let .mtcQuarterFrame(value): return ("MTC Quarter Frame", ("value", "\(value)"))
+        case let .songPosition(beats): return ("Song Position", ("beat", "\(beats)"))
+        case let .songSelect(song): return ("Song Select \(pad3(song))", nil)
+        case .tuneRequest: return ("Tune Request", nil)
+        case .clock: return ("Clock", nil)
+        case .start: return ("Start", nil)
+        case .continue: return ("Continue", nil)
+        case .stop: return ("Stop", nil)
+        case .activeSensing: return ("Active Sensing", nil)
+        case .reset: return ("System Reset", nil)
         }
+    }
+
+    /// e.g. `Note 079 On (G5), velocity: 93`
+    public static func description(of kind: MIDIEventKind) -> String {
+        let (message, value) = parts(of: kind)
+        return value.map { "\(message), \($0.name): \($0.text)" } ?? message
     }
 
     /// Seconds within the current minute plus milliseconds, e.g. `4.841`.

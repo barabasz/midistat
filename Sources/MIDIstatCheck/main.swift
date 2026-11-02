@@ -189,6 +189,55 @@ func releaseNotesSummary() {
     expect(m.shown.count == 5 && m.more == 95 && m.shown.first == "change 100")
 }
 
+func clockTracker() {
+    let clock = ClockTracker()
+    let start = Date(timeIntervalSince1970: 1_000_000)
+    let tick = 60.0 / 120.0 / 24.0  // 120 BPM
+    expect(clock.summary(at: start) == nil)
+    clock.handle(MIDIEvent(date: start, source: "DAW", channel: nil, kind: .start))
+    for i in 0..<48 { clock.handle(MIDIEvent(date: start.addingTimeInterval(Double(i) * tick), source: "DAW", channel: nil, kind: .clock)) }
+    let now = start.addingTimeInterval(47 * tick + 0.1)
+    expect(abs((clock.bpm ?? 0) - 120) < 0.01)
+    expect(clock.summary(at: now) == "MIDI Clock: 120.0 BPM, running (DAW)")
+    clock.handle(MIDIEvent(date: now, source: "DAW", channel: nil, kind: .stop))
+    expect(clock.summary(at: now) == "MIDI Clock: 120.0 BPM, stopped (DAW)")
+    expect(clock.summary(at: now.addingTimeInterval(2)) == nil)  // ticks stopped arriving
+}
+
+func activeSensingTracker() {
+    let sensing = ActiveSensingTracker()
+    let t = Date(timeIntervalSince1970: 2_000_000)
+    sensing.handle(MIDIEvent(date: t, source: "Yamaha P-125", channel: nil, kind: .activeSensing))
+    sensing.handle(MIDIEvent(date: t, source: "Roland FP-30", channel: nil, kind: .activeSensing))
+    expect(sensing.summary(at: t.addingTimeInterval(0.3)) == "Active Sensing: Roland FP-30, Yamaha P-125")
+    sensing.handle(MIDIEvent(date: t.addingTimeInterval(0.9), source: "Roland FP-30", channel: nil, kind: .activeSensing))
+    expect(sensing.devices(at: t.addingTimeInterval(1.5)) == ["Roland FP-30"])
+    expect(sensing.summary(at: t.addingTimeInterval(5)) == nil)
+}
+
+func alignedColumns() {
+    let note = MIDIEvent.fromBytes(status: 0x90, data1: 79, data2: 93, date: date, source: "Xkey Air 25")!
+    let start = MIDIEvent.fromBytes(status: 0xFA, data1: 0, data2: 0, date: date, source: "A very long device name here")!
+    let all = MIDIFormat.Columns(timestamp: true, device: true, channel: true, deviceWidth: 12)
+    expect(MIDIFormat.alignedLine(for: note, columns: all, calendar: utc)
+        == " 4.841  Xkey Air 25   ch: 1  Note 079 On (G5), velocity: 93")
+    expect(MIDIFormat.alignedLine(for: start, columns: all, calendar: utc)
+        == " 4.841  A very long…         Start")
+    let eventOnly = MIDIFormat.Columns(timestamp: false, device: false, channel: false)
+    expect(MIDIFormat.alignedLine(for: note, columns: eventOnly) == "Note 079 On (G5), velocity: 93")
+    expect(all.totalWidth == 6 + 12 + 5 + 44 + 2 * 3 && eventOnly.totalWidth == 44)
+}
+
+func messageParts() {
+    let note = MIDIFormat.parts(of: .noteOn(note: 79, velocity: 93))
+    expect(note.message == "Note 079 On (G5)" && note.value?.name == "velocity" && note.value?.text == "93")
+    let bend = MIDIFormat.parts(of: .pitchBend(value: 2048))
+    expect(bend.message == "Pitch Bend" && bend.value?.text == "+2048")
+    let program = MIDIFormat.parts(of: .programChange(program: 5))
+    expect(program.message == "Program Change 005" && program.value == nil)
+    expect(MIDIFormat.description(of: .controlChange(controller: 64, value: 127)) == "Control Change 064 (Sustain), value: 127")
+}
+
 let tests: [(String, () -> Void)] = [
     ("noteOnMatchesSpecExample", noteOnMatchesSpecExample),
     ("noteOnWithZeroVelocityIsNoteOff", noteOnWithZeroVelocityIsNoteOff),
@@ -205,6 +254,10 @@ let tests: [(String, () -> Void)] = [
     ("releaseVersions", releaseVersions),
     ("releaseNotesChanges", releaseNotesChanges),
     ("releaseNotesSummary", releaseNotesSummary),
+    ("clockTracker", clockTracker),
+    ("activeSensingTracker", activeSensingTracker),
+    ("alignedColumns", alignedColumns),
+    ("messageParts", messageParts),
 ]
 for (name, test) in tests { currentTest = name; test() }
 print(failures == 0 ? "All \(tests.count) checks passed." : "\(failures) failure(s).")
