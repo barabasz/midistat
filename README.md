@@ -4,13 +4,21 @@
 
 ![MIDIstat in the menu bar, with its floating windows](img/midistat.webp)
 
-Plug in a keyboard, a controller or an interface, and the small **MI / DI** mark in the menu bar lights up green the moment MIDI comes in. No more guessing whether the cable, the driver or the DAW is the problem. And when you want more than a light, MIDIstat opens small floating windows that show exactly what you play.
+Plug in a keyboard, a controller or an interface, and the small **MI / DI** mark in the menu bar lights up green the moment MIDI comes in.
+
+| D | Meaning |
+|---|---|
+| $\color{green}{◗}$ **green** | a MIDI message was received within the last second |
+| $\color{gray}{◗}$ **grey** | listening, but nothing has arrived for over a second |
+| $\color{red}{◗}$ **red** | not listening: there is no MIDI input, or the selected input is disconnected |
+
+No more guessing whether the cable, the driver or the DAW is the problem. And when you want more than a light, MIDIstat opens small floating windows that show exactly what you play.
 
 MIDIstat is **free and open source, and always will be**. No account, no ads, no tracking. It connects to the internet only when you check for updates.
 
 ## Why MIDIstat
 
-- **Instant answer.** Green: MIDI arrived within the last second. Grey: listening, all quiet. Red: no MIDI input connected.
+- **Instant answer.** One glance at the menu bar tells you whether MIDI is arriving.
 - **See every message.** The menu shows the last event live: device, channel, note, velocity, controller, pitch bend, aftertouch and more.
 - **Floating windows you place anywhere.** Four small windows show the last events, the notes you play, practice statistics and the full log. Arrange them around your screen, keep them on top of every app and every desktop, even over a full-screen DAW, or let them behave like ordinary windows.
 - **A practice companion.** See the notes you played in large type, how hard you hit each key, and how many notes per minute you play.
