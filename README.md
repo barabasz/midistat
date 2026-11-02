@@ -26,7 +26,7 @@ Click the icon to open the menu. Its first line shows the installed version, e.g
   4.911, Xkey Air 25, ch: 1, Note 079 Off (G5), velocity: 0
   ```
   If some message types are hidden (see Options), a line such as `Hidden: 120 Clock / Active Sensing, 3400 Aftertouch` shows how many were left out.
-- **Show Full Log…** (⌘L): opens the log window (see below).
+- **Show Full Log** (⌘L): shows or hides the log window (see below). It is checked while the window is open.
 - **Show Last Notes** (⌘N, default off): shows or hides the Last Notes window (see below).
 - **MIDI Input**:
   - **Listen to All MIDI Inputs** (⌘A), or
@@ -52,7 +52,7 @@ All settings, including the selected input, are remembered between launches.
 
 ### Log window
 
-**Show Full Log…** opens a resizable window (it can also be zoomed or made full screen) that lists every message since MIDIstat started, or since the log was last cleared:
+**Show Full Log** opens a resizable window (it can also be zoomed or made full screen) that lists every message since MIDIstat started, or since the log was last cleared:
 
 - columns **Time** (`HH:mm:ss.SSS`), **Device**, **Ch**, **Message**;
 - **Show Clock & Active Sensing** and **Show Aftertouch** checkboxes. These are the same settings as in the menu;

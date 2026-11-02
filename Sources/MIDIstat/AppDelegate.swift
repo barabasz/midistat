@@ -224,7 +224,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hiddenCountItem = hidden
         updateEventItems()
 
-        menu.addItem(item("Show Full Log…", #selector(showLog), key: "l"))
+        let fullLog = item("Show Full Log", #selector(toggleLogFromMenu), key: "l")
+        fullLog.state = logWindow.isVisible ? .on : .off
+        menu.addItem(fullLog)
         let lastNotes = item("Show Last Notes", #selector(toggleLastNotes), key: "n")
         lastNotes.state = lastNotesWindow.isVisible ? .on : .off
         lastNotes.toolTip = "A small window with the last notes played, newest on the left. Widen it to see more notes."
@@ -347,6 +349,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func showLog() {
         // Let the status menu finish closing before bringing the window forward.
         DispatchQueue.main.async { self.logWindow.show() }
+    }
+
+    /// The status menu item is a toggle, like Show Last Notes: checked while the
+    /// window is open, choosing it again closes the window.
+    @objc private func toggleLogFromMenu() {
+        if logWindow.isVisible {
+            logWindow.closeLog()
+        } else {
+            showLog()
+        }
     }
 
     /// ⌘L while the log window is focused closes it; otherwise opens it.
