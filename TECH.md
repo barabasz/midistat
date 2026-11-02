@@ -98,7 +98,7 @@ A single timer, which also runs while the menu is open, switches green back to g
 
 **Updates.** One GitHub API request returns all releases with their notes. Each release's notes list only the commits since the previous release, so the changes since the installed version are the "Changes" sections of all newer releases. Version commits are left out, and the dialog shows the newest 5 plus a count and a link to GitHub's comparison page. Before anything is replaced, the downloaded zip is checked against GitHub's SHA-256 digest, and the unpacked app against the expected bundle identifier, version and code signature. The running app cannot replace itself safely, so it starts a small detached shell script and quits. The script waits for the old process to exit, swaps the bundle (restoring the old one if the swap fails) and launches the new version. Settings live in `UserDefaults`, so they are kept.
 
-**Settings.** Stored in `UserDefaults`, with defaults registered at launch. Launch at Login uses the system's login item service (`SMAppService`).
+**Settings.** Stored in `UserDefaults`, with defaults registered at launch. Launch at Login uses the system's login item service (`SMAppService`). The appearance choice is set on each window (not on the whole app), so the status item's menu keeps matching the menu bar; windows are registered when they are first created, which happens lazily.
 
 **Icon.** A single drawing routine scales from the menu bar size to the 1024 px app icon. Menu bar colours are resolved at draw time, so they follow light and dark mode. The build script asks the app binary to render the iconset and converts it with `iconutil`, so no image files are kept in the repository.
 

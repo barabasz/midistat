@@ -38,6 +38,7 @@ Click the icon to open the menu. Its first line shows the installed version, e.g
   - one specific input. Inputs are listed live as devices are connected and disconnected. A selected input that is currently unplugged appears as `Name (disconnected)`.
 - **Options**:
   - **Launch at Login** (⌥L, hold Option while the menu is open): start MIDIstat automatically when you log in.
+  - **Appearance**: **Auto (System)** (default), **Light** or **Dark**, for all MIDIstat windows. The menu itself always follows the menu bar.
 - **Check for Updates…** (⌘U): asks GitHub for the latest release.
   - If you have the latest version, a dialog says so.
   - Otherwise a dialog shows the new version and what's new since your version, covering every release you skipped. It lists up to 5 changes, newest first, then *…and N more* with a **See all changes** link to GitHub's comparison of your version with the new one. The buttons are **Upgrade** and **Cancel**. **Upgrade** downloads the new version and checks it: GitHub's SHA-256 checksum, the app identifier, the version and the code signature. It then replaces the installed app in place, keeping your settings, and restarts MIDIstat. If something fails, the old version stays and you can open the release page.
@@ -161,6 +162,7 @@ $MIDISTAT ctl events 5               # the last 5 events
 | `events [N]` | The last N events (default 10, max 1000), filtered like Last Events: time, device, channel, message. |
 | `set <option> <on\|off\|toggle>` | Options: `events-timestamp`, `events-device`, `events-channel`, `events-aftertouch`, `events-on-top`, `log-aftertouch`, `log-on-top`, `notes-on-top`, `notes-xlarge`, `notes-velocity`, `notes-colored`, `notes-values`, `stats-on-top`, `launch-at-login`. |
 | `input all` / `input <name or ID>` | Listen to all inputs, or to one: its exact name (as in `status`) or unique ID. |
+| `appearance <auto\|light\|dark>` | The appearance of the windows, the same as **Appearance** in the menu. |
 | `open <log\|events\|notes\|stats>` / `close …` | Show or hide a window. Opening does not take the focus away from the app you are using. |
 | `clear-log` | Clear the event history, the same as **Clear Log**. |
 | `reset-stats` | Reset the statistics, the same as **Reset** in the Statistics window. |

@@ -23,9 +23,33 @@ enum Defaults {
     static let lastNotesVelocity = "lastNotesVelocity"
     static let lastNotesColored = "lastNotesColored"
     static let lastNotesValues = "lastNotesValues"
+    // All windows: "auto", "light" or "dark"
+    static let appearance = "appearance"
     // Statistics window
     static let showStatistics = "showStatistics"
     static let statisticsAlwaysOnTop = "statisticsAlwaysOnTop"
+}
+
+/// The appearance of MIDIstat's windows.
+enum AppearanceChoice: String, CaseIterable {
+    case auto, light, dark
+
+    var title: String {
+        switch self {
+        case .auto: "Auto (System)"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    /// nil follows the system setting.
+    var appearance: NSAppearance? {
+        switch self {
+        case .auto: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -52,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             deviceNames: { [unowned self] in self.monitor.sources.map(\.name) },
             onClear: { [unowned self] in self.clearLog() })
+        adoptAppearance(controller)
         return controller
     }()
 
@@ -73,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             deviceNames: { [unowned self] in self.monitor.sources.map(\.name) },
             onClear: { [unowned self] in self.clearLog() })
         controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showLastEvents) }
+        adoptAppearance(controller)
         return controller
     }()
 
@@ -92,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             })
         // Closing the panel with its close button turns the option off.
         controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showLastNotes) }
+        adoptAppearance(controller)
         return controller
     }()
 
@@ -105,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onReset: { [unowned self] in self.resetNoteStats() })
         // Closing the panel with its close button turns the option off.
         controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showStatistics) }
+        adoptAppearance(controller)
         return controller
     }()
 
@@ -144,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Defaults.lastNotesColored: false,
             Defaults.lastNotesValues: false,
             Defaults.showStatistics: false,
+            Defaults.appearance: AppearanceChoice.auto.rawValue,
             Defaults.statisticsAlwaysOnTop: true,
         ])
         defaults.removeObject(forKey: "showContinuousRealtime")  // option removed in 0.7
@@ -345,6 +374,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         default: login.state = .off
         }
         menu.addItem(login)
+        let appearance = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
+        appearance.toolTip = "Light or dark windows, or following the system setting."
+        let appearanceMenu = NSMenu(title: "Appearance")
+        appearanceMenu.autoenablesItems = false
+        for choice in AppearanceChoice.allCases {
+            let choiceItem = item(choice.title, #selector(selectAppearance(_:)))
+            choiceItem.representedObject = choice.rawValue
+            choiceItem.state = choice == appearanceChoice ? .on : .off
+            appearanceMenu.addItem(choiceItem)
+        }
+        appearance.submenu = appearanceMenu
+        menu.addItem(appearance)
 
         menu.addItem(.separator())
         menu.addItem(item("Check for Updates…", #selector(checkForUpdates), key: "u"))
@@ -651,6 +692,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func sendPanic() {
         monitor.sendPanic()
+    }
+
+    // MARK: - Appearance
+
+    var appearanceChoice: AppearanceChoice {
+        AppearanceChoice(rawValue: defaults.string(forKey: Defaults.appearance) ?? "") ?? .auto
+    }
+
+    /// Windows created so far; windows are created lazily, on first use.
+    private static var appearanceWindows: [NSWindow] = []
+
+    /// Gives a newly created window the chosen appearance and follows later changes.
+    private func adoptAppearance(_ controller: NSWindowController) {
+        guard let window = controller.window else { return }
+        window.appearance = appearanceChoice.appearance
+        Self.appearanceWindows.append(window)
+    }
+
+    @objc private func selectAppearance(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let choice = AppearanceChoice(rawValue: raw) else { return }
+        setAppearance(choice)
+    }
+
+    /// Applies to all MIDIstat windows; the menu keeps following the menu bar.
+    func setAppearance(_ choice: AppearanceChoice) {
+        defaults.set(choice.rawValue, forKey: Defaults.appearance)
+        Self.appearanceWindows.forEach { $0.appearance = choice.appearance }
     }
 
     @objc private func toggleLaunchAtLogin() {

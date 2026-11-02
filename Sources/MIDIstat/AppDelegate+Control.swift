@@ -17,6 +17,7 @@ extension AppDelegate {
         "                               notes-on-top, notes-xlarge, notes-velocity, notes-colored,",
         "                               notes-values, stats-on-top, launch-at-login",
         "input all | input <name|ID>    listen to all inputs, or to one (exact name or unique ID)",
+        "appearance <auto|light|dark>   the appearance of the windows (auto follows the system)",
         "open <log|events|notes|stats>  show a window (without taking the focus)",
         "close <log|events|notes|stats> hide a window",
         "clear-log                      clear the event history (log, Last Events, menu)",
@@ -106,6 +107,11 @@ extension AppDelegate {
             case "set":
                 guard arguments.count == 2 else { throw ControlError("usage: set <option> <on|off|toggle>") }
                 try setControlOption(arguments[0].lowercased(), arguments[1].lowercased())
+            case "appearance":
+                guard arguments.count == 1, let choice = AppearanceChoice(rawValue: arguments[0].lowercased()) else {
+                    throw ControlError("usage: appearance <auto|light|dark>")
+                }
+                setAppearance(choice)
             case "input":
                 try selectControlInput(arguments.joined(separator: " "))
             case "open", "close":
@@ -228,6 +234,7 @@ extension AppDelegate {
         }
         var options: [String: Any] = controlOptions.mapValues { $0.get() }
         options["launch-at-login"] = login
+        options["appearance"] = appearanceChoice.rawValue
 
         let now = Date()
         var clockStatus: [String: Any] = ["present": clock.isPresent(at: now)]
