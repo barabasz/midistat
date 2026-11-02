@@ -54,7 +54,7 @@ midistat/
 | `LogWindowController.swift` | The full log window (a table). |
 | `LastEventsWindowController.swift` | The Last Events window: the most recent events as aligned text, updated instantly. |
 | `LastNotesWindowController.swift` | The Last Notes window: the most recent notes in large type, animated. |
-| `StatusIcon.swift` | Draws the MI / ▶I mark, both for the menu bar and for the app icon. |
+| `StatusIcon.swift` | Draws the MI / DI mark (the solid D is the indicator), both for the menu bar and for the app icon. |
 | `Updater.swift` | Checks GitHub Releases for a newer version, verifies the download and swaps the app bundle in place. |
 | `WindowBehavior.swift` | "Always on top" (window level and Space behaviour) shared by all windows. |
 | `Activation.swift` | Brings the app to the front when one of its windows opens. |

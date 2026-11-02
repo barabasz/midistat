@@ -4,13 +4,13 @@ A tiny native macOS menu bar app that shows, at a glance, whether MIDI data is a
 
 ![MIDIstat menu bar app and MIDI event list](MIDIstat.webp)
 
-MIDIstat has no Dock icon and no main window. It lives in the menu bar as a two-row **MI / ▶I** mark; the triangle is the indicator:
+MIDIstat has no Dock icon and no main window. It lives in the menu bar as a two-row **MI / DI** mark; the solid **D** is the indicator:
 
-| Triangle | Meaning |
+| D | Meaning |
 |---|---|
-| $\color{green}{▶}$ **green** | a MIDI message was received within the last second |
-| $\color{gray}{▶}$ **grey** | listening, but nothing has arrived for over a second |
-| $\color{red}{▶}$ **red** | not listening: there is no MIDI input, or the selected input is disconnected |
+| $\color{green}{◗}$ **green** | a MIDI message was received within the last second |
+| $\color{gray}{◗}$ **grey** | listening, but nothing has arrived for over a second |
+| $\color{red}{◗}$ **red** | not listening: there is no MIDI input, or the selected input is disconnected |
 
 The red state applies even if other devices are connected: when a specific input is selected and it disappears, MIDIstat is not listening to anything. It turns grey again automatically when the device comes back.
 

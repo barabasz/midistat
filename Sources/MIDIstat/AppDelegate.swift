@@ -210,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         lastNotesWindow.setNoteCount(0)
     }
 
-    /// One pending timer that turns the green triangle off 1 s after the last message.
+    /// One pending timer that turns the green indicator off 1 s after the last message.
     private func scheduleActivityTimer() {
         guard activityTimer == nil else { return }
         let timer = Timer(fire: activeUntil, interval: 0, repeats: false) { [weak self] _ in

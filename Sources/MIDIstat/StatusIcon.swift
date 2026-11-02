@@ -22,38 +22,43 @@ enum IconState {
     }
 }
 
-/// The "MI / ▶I" mark in two columns: the triangle (the indicator) sits under
-/// the M, the two I's are aligned.
+/// The "MI / DI" mark in two columns: the bottom-left "D" (the indicator)
+/// sits under the M and is as wide as the M's ink, the two I's are aligned.
+/// The D is a solid shape: a straight left edge, flat top and bottom, and a
+/// semicircle on the right, very slightly taller than the letters (like the
+/// optical overshoot of round letters).
 /// All proportions scale with the font size, so the same drawing is used
 /// for the 18 pt menu bar icon and the 1024 px app icon.
 struct Glyph {
     let font: NSFont
     private let letterSpacing: CGFloat
     private let rowGap: CGFloat
-    private let triangleWidth: CGFloat
-    private let triangleGap: CGFloat
     private let widthM: CGFloat, widthI: CGFloat
+    /// The M's ink (outline) within its advance width.
+    private let inkM: CGRect
 
     init(fontSize: CGFloat) {
         font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         letterSpacing = fontSize * 0.06
         rowGap = fontSize * 0.27
-        triangleWidth = font.capHeight * 0.9
-        triangleGap = fontSize * 0.12
         let measure = { [font] (s: String) in (s as NSString).size(withAttributes: [.font: font]).width }
         widthM = measure("M")
         widthI = measure("I")
+        var character: UniChar = 0x4D  // "M"
+        var glyph = CGGlyph()
+        CTFontGetGlyphsForCharacters(font as CTFont, &character, &glyph, 1)
+        inkM = font.boundingRect(forCGGlyph: glyph)
     }
 
-    private var leftColumn: CGFloat { max(widthM, triangleWidth) }
-    private var columnGap: CGFloat { max(letterSpacing, triangleGap - (leftColumn - triangleWidth) / 2) }
+    private var leftColumn: CGFloat { widthM }
+    private var columnGap: CGFloat { letterSpacing }
 
     /// Size of the ink: from the bottom baseline to the top cap height.
     var size: NSSize {
         NSSize(width: leftColumn + columnGap + widthI, height: 2 * font.capHeight + rowGap)
     }
 
-    func draw(at origin: NSPoint, letterColor: NSColor, triangleColor: NSColor) {
+    func draw(at origin: NSPoint, letterColor: NSColor, indicatorColor: NSColor) {
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: letterColor]
         func text(_ s: String, x: CGFloat, baseline: CGFloat) {
             (s as NSString).draw(at: NSPoint(x: x, y: baseline + font.descender), withAttributes: attributes)
@@ -62,19 +67,25 @@ struct Glyph {
         let bottomBaseline = origin.y
         let topBaseline = origin.y + capHeight + rowGap
         let rightX = origin.x + leftColumn + columnGap
-        let triangleX = origin.x + (leftColumn - triangleWidth) / 2
 
-        text("M", x: origin.x + (leftColumn - widthM) / 2, baseline: topBaseline)
+        text("M", x: origin.x, baseline: topBaseline)
         text("I", x: rightX, baseline: topBaseline)
         text("I", x: rightX, baseline: bottomBaseline)
 
-        let triangle = NSBezierPath()
-        triangle.move(to: NSPoint(x: triangleX, y: bottomBaseline))
-        triangle.line(to: NSPoint(x: triangleX, y: bottomBaseline + capHeight))
-        triangle.line(to: NSPoint(x: triangleX + triangleWidth, y: bottomBaseline + capHeight / 2))
-        triangle.close()
-        triangleColor.setFill()
-        triangle.fill()
+        // The D: under the M's ink, a hair taller than the cap height.
+        let overshoot = capHeight * 0.02
+        let rect = NSRect(x: origin.x + inkM.minX, y: bottomBaseline - overshoot,
+                          width: inkM.width, height: capHeight + 2 * overshoot)
+        let radius = min(rect.height / 2, rect.width)
+        let d = NSBezierPath()
+        d.move(to: NSPoint(x: rect.minX, y: rect.minY))
+        d.line(to: NSPoint(x: rect.maxX - radius, y: rect.minY))
+        d.appendArc(withCenter: NSPoint(x: rect.maxX - radius, y: rect.midY), radius: radius,
+                    startAngle: -90, endAngle: 90)
+        d.line(to: NSPoint(x: rect.minX, y: rect.maxY))
+        d.close()
+        indicatorColor.setFill()
+        d.fill()
     }
 }
 
@@ -92,7 +103,7 @@ enum StatusIcon {
 
         let image = NSImage(size: size, flipped: false) { _ in
             // Colours resolve at draw time, so the letters follow light/dark menu bars.
-            glyph.draw(at: origin, letterColor: .labelColor, triangleColor: state.indicatorColor)
+            glyph.draw(at: origin, letterColor: .labelColor, indicatorColor: state.indicatorColor)
             return true
         }
         image.isTemplate = false
@@ -157,6 +168,6 @@ enum AppIcon {
         let origin = NSPoint(x: tile.midX - glyph.size.width / 2, y: tile.midY - glyph.size.height / 2)
         glyph.draw(at: origin,
                    letterColor: NSColor(white: 0.96, alpha: 1),
-                   triangleColor: NSColor(srgbRed: 0.20, green: 0.78, blue: 0.35, alpha: 1))
+                   indicatorColor: NSColor(srgbRed: 0.20, green: 0.78, blue: 0.35, alpha: 1))
     }
 }
