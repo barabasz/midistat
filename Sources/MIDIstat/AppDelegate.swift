@@ -6,30 +6,66 @@ import ServiceManagement
 enum Defaults {
     static let inputUniqueID = "inputUniqueID"
     static let inputName = "inputName"
-    static let showContinuousRealtime = "showContinuousRealtime"
-    static let showAftertouch = "showAftertouch"
+    // Last Events window (also used for the last event in the menu)
+    static let showLastEvents = "showLastEvents"
     static let showTimestamp = "showTimestamp"
     static let showDeviceName = "showDeviceName"
     static let showChannel = "showChannel"
+    static let showAftertouch = "showAftertouch"
+    static let lastEventsAlwaysOnTop = "lastEventsAlwaysOnTop"
+    // Full log window
+    static let logShowAftertouch = "logShowAftertouch"
+    static let logAlwaysOnTop = "logAlwaysOnTop"
+    // Last Notes window
     static let showLastNotes = "showLastNotes"
     static let lastNotesAlwaysOnTop = "lastNotesAlwaysOnTop"
     static let lastNotesExtraLargeFont = "lastNotesExtraLargeFont"
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private static let recentCount = 10
     private static let activityDuration: TimeInterval = 1
 
     let defaults = UserDefaults.standard
     let monitor = MIDIMonitor()
     let store = EventStore()
+    let clock = ClockTracker()
+    let activeSensing = ActiveSensingTracker()
+    /// Key presses (Note On) since MIDIstat started, shown in Last Notes.
+    private(set) var notesCount = 0
     private var statusItem: NSStatusItem!
     var startError: String?
+
     lazy var logWindow = LogWindowController(
         store: store,
-        shownCategories: { [unowned self] in self.shownCategories },
-        setCategory: { [unowned self] category, shown in self.setCategory(category, shown: shown) },
+        settings: .init(aftertouch: defaults.bool(forKey: Defaults.logShowAftertouch),
+                        alwaysOnTop: defaults.bool(forKey: Defaults.logAlwaysOnTop)),
+        saveSettings: { [unowned self] settings in
+            self.defaults.set(settings.aftertouch, forKey: Defaults.logShowAftertouch)
+            self.defaults.set(settings.alwaysOnTop, forKey: Defaults.logAlwaysOnTop)
+        },
         onClear: { [unowned self] in self.clearLog() })
+
+    lazy var lastEventsWindow: LastEventsWindowController = {
+        let controller = LastEventsWindowController(
+            store: store,
+            settings: .init(timestamp: defaults.bool(forKey: Defaults.showTimestamp),
+                            device: defaults.bool(forKey: Defaults.showDeviceName),
+                            channel: defaults.bool(forKey: Defaults.showChannel),
+                            aftertouch: defaults.bool(forKey: Defaults.showAftertouch),
+                            alwaysOnTop: defaults.bool(forKey: Defaults.lastEventsAlwaysOnTop)),
+            saveSettings: { [unowned self] settings in
+                self.defaults.set(settings.timestamp, forKey: Defaults.showTimestamp)
+                self.defaults.set(settings.device, forKey: Defaults.showDeviceName)
+                self.defaults.set(settings.channel, forKey: Defaults.showChannel)
+                self.defaults.set(settings.aftertouch, forKey: Defaults.showAftertouch)
+                self.defaults.set(settings.alwaysOnTop, forKey: Defaults.lastEventsAlwaysOnTop)
+            },
+            deviceNames: { [unowned self] in self.monitor.sources.map(\.name) },
+            onClear: { [unowned self] in self.clearLog() })
+        controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showLastEvents) }
+        return controller
+    }()
+
     lazy var lastNotesWindow: LastNotesWindowController = {
         let controller = LastNotesWindowController(
             settings: .init(alwaysOnTop: defaults.bool(forKey: Defaults.lastNotesAlwaysOnTop),
@@ -40,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             })
         // Closing the panel with its close button turns the option off.
         controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showLastNotes) }
+        controller.onResetCount = { [unowned self] in self.resetNotesCount() }
+        controller.setNoteCount(notesCount)
         return controller
     }()
 
@@ -48,45 +86,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var activityTimer: Timer?
     var iconState: IconState?
 
-    private var eventItems: [NSMenuItem] = []
-    private var hiddenCountItem: NSMenuItem?
+    // Menu items updated live while the menu is open.
+    private var lastEventItems: [NSMenuItem] = []
+    private var clockItem: NSMenuItem?
+    private var activeSensingItem: NSMenuItem?
+    private var menuRefreshTimer: Timer?
     var isMenuOpen = false
 
-    // MARK: - Settings
-
-    /// Optional message categories shown in the event lists (menu and log window).
-    var shownCategories: EventCategories {
-        var shown: EventCategories = []
-        if defaults.bool(forKey: Defaults.showContinuousRealtime) { shown.insert(.continuousRealtime) }
-        if defaults.bool(forKey: Defaults.showAftertouch) { shown.insert(.aftertouch) }
-        return shown
+    /// The Last Events window's aftertouch option (also used by `ctl events`).
+    var lastEventsCategories: EventCategories {
+        defaults.bool(forKey: Defaults.showAftertouch) ? [.aftertouch] : []
     }
-
-    func setCategory(_ category: EventCategories, shown: Bool) {
-        let key = category == .aftertouch ? Defaults.showAftertouch : Defaults.showContinuousRealtime
-        defaults.set(shown, forKey: key)
-        logWindow.settingsDidChange()
-        if isMenuOpen { updateEventItems() }
-    }
-
-    // These affect only the menu list; the log window always shows all of them.
-    var showTimestamp: Bool { defaults.bool(forKey: Defaults.showTimestamp) }
-    var showDeviceName: Bool { defaults.bool(forKey: Defaults.showDeviceName) }
-    var showChannel: Bool { defaults.bool(forKey: Defaults.showChannel) }
 
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         defaults.register(defaults: [
+            Defaults.showLastEvents: false,
             Defaults.showTimestamp: true,
             Defaults.showDeviceName: true,
             Defaults.showChannel: true,
-            Defaults.showContinuousRealtime: false,
             Defaults.showAftertouch: false,
+            Defaults.lastEventsAlwaysOnTop: true,
+            Defaults.logShowAftertouch: false,
+            Defaults.logAlwaysOnTop: false,
             Defaults.showLastNotes: false,
             Defaults.lastNotesAlwaysOnTop: true,
             Defaults.lastNotesExtraLargeFont: false,
         ])
+        defaults.removeObject(forKey: "showContinuousRealtime")  // option removed in 0.7
         NSApp.mainMenu = makeMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -98,8 +126,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.selection = savedSelection()
         monitor.onEvent = { [weak self] event in self?.handle(event) }
         monitor.onSetupChanged = { [weak self] in
-            self?.updateIcon()
-            if self?.isMenuOpen == true { self?.rebuildMenu() }
+            guard let self else { return }
+            self.updateIcon()
+            self.lastEventsWindow.devicesDidChange()
+            if self.isMenuOpen { self.rebuildMenu() }
         }
         do {
             try monitor.start()
@@ -107,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             startError = "\(error)"
         }
         updateIcon()
+        if defaults.bool(forKey: Defaults.showLastEvents) { lastEventsWindow.show() }
         if defaults.bool(forKey: Defaults.showLastNotes) { lastNotesWindow.show() }
         startControlServer()
     }
@@ -115,8 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controlServer?.stop()
     }
 
-    /// Not visible (the app has no menu bar of its own), but provides the
-    /// usual shortcuts in the log window: ⌘C, ⌘A, ⌘L (close the log), ⌘P (MIDI panic), ⌘W, ⌘M, ⌘Q.
+    /// Not visible (the app has no menu bar of its own), but provides the usual
+    /// shortcuts while one of its windows has focus: ⌘C, ⌘A, ⌘F (log filter),
+    /// ⌘L / ⌘E / ⌘N (toggle the windows), ⌘P (MIDI panic), ⌘W, ⌘M, ⌘Q.
     private func makeMainMenu() -> NSMenu {
         let main = NSMenu()
         func submenu(_ title: String, _ items: [NSMenuItem]) {
@@ -130,17 +162,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu("Edit", [
             NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"),
             NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"),
+            item("Filter Log", #selector(focusLogFilter), key: "f"),
         ])
-        let toggleLog = NSMenuItem(title: "Toggle Full Log", action: #selector(toggleLog), keyEquivalent: "l")
-        toggleLog.target = self
-        let panic = NSMenuItem(title: "MIDI Panic", action: #selector(sendPanic), keyEquivalent: "p")
-        panic.target = self
-        submenu("MIDI", [panic])
-        let toggleNotes = NSMenuItem(title: "Show Last Notes", action: #selector(toggleLastNotes), keyEquivalent: "n")
-        toggleNotes.target = self
+        submenu("MIDI", [item("MIDI Panic", #selector(sendPanic), key: "p")])
         submenu("Window", [
-            toggleLog,
-            toggleNotes,
+            item("Toggle Full Log", #selector(toggleLog), key: "l"),
+            item("Show Last Events", #selector(toggleLastEvents), key: "e"),
+            item("Show Last Notes", #selector(toggleLastNotes), key: "n"),
             NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"),
             NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"),
         ])
@@ -150,21 +178,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Events & icon
 
     private func handle(_ event: MIDIEvent) {
-        store.append(event)
         activeUntil = event.date.addingTimeInterval(Self.activityDuration)
         scheduleActivityTimer()
         updateIcon()
-        if isMenuOpen { updateEventItems() }
+
+        // Clock and Active Sensing are summarised, not listed.
+        clock.handle(event)
+        activeSensing.handle(event)
+        guard event.category != .continuousRealtime else { return }
+
+        store.append(event)
+        if isMenuOpen { updateLastEventItems() }
         logWindow.eventsDidChange()
-        if case let .noteOn(note, _) = event.kind, lastNotesWindow.isVisible {
-            lastNotesWindow.add(note: note)
+        lastEventsWindow.eventsDidChange()
+        if case let .noteOn(note, _) = event.kind {
+            notesCount += 1
+            lastNotesWindow.setNoteCount(notesCount)
+            if lastNotesWindow.isVisible { lastNotesWindow.add(note: note) }
         }
     }
 
     func clearLog() {
         store.clear()
         logWindow.settingsDidChange()
-        if isMenuOpen { updateEventItems() }
+        lastEventsWindow.eventsDidChange()
+        if isMenuOpen { updateLastEventItems() }
+    }
+
+    func resetNotesCount() {
+        notesCount = 0
+        lastNotesWindow.setNoteCount(0)
     }
 
     /// One pending timer that turns the green triangle off 1 s after the last message.
@@ -197,8 +240,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Menu
 
-    func menuWillOpen(_ menu: NSMenu) { isMenuOpen = true }
-    func menuDidClose(_ menu: NSMenu) { isMenuOpen = false }
+    func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
+        // Clock tempo and presence change without list events: refresh twice a second.
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.updateRealtimeItems() }
+        RunLoop.main.add(timer, forMode: .common)
+        menuRefreshTimer = timer
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
+        menuRefreshTimer?.invalidate()
+        menuRefreshTimer = nil
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) { rebuildMenu() }
 
     func rebuildMenu() {
@@ -213,24 +268,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        menu.addItem(.sectionHeader(title: "Last \(Self.recentCount) MIDI Events"))
-        eventItems = (0..<Self.recentCount).map { _ in
+        menu.addItem(.sectionHeader(title: "Last MIDI Event"))
+        lastEventItems = (0..<3).map { _ in
             let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
             menu.addItem(item)
             return item
         }
-        let hidden = disabledItem("")
-        menu.addItem(hidden)
-        hiddenCountItem = hidden
-        updateEventItems()
+        let clockLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        let sensingLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        clockLine.toolTip = "MIDI Clock synchronises tempo; it is sent by a DAW, drum machine or sequencer."
+        sensingLine.toolTip = "Active Sensing is a \u{201C}still connected\u{201D} signal some instruments send every ~300 ms."
+        menu.addItem(clockLine)
+        menu.addItem(sensingLine)
+        clockItem = clockLine
+        activeSensingItem = sensingLine
+        updateLastEventItems()
+        updateRealtimeItems()
 
-        let fullLog = item("Show Full Log", #selector(toggleLogFromMenu), key: "l")
-        fullLog.state = logWindow.isVisible ? .on : .off
-        menu.addItem(fullLog)
-        let lastNotes = item("Show Last Notes", #selector(toggleLastNotes), key: "n")
-        lastNotes.state = lastNotesWindow.isVisible ? .on : .off
-        lastNotes.toolTip = "A small window with the last notes played, newest on the left. Widen it to see more notes."
-        menu.addItem(lastNotes)
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "Floating Windows"))
+        menu.addItem(windowItem("Show Full Log", #selector(toggleLogFromMenu), key: "l", open: logWindow.isVisible,
+                                tip: "All MIDI events since MIDIstat started, in a table."))
+        menu.addItem(windowItem("Show Last Events", #selector(toggleLastEvents), key: "e", open: lastEventsWindow.isVisible,
+                                tip: "A compact window with the most recent events, updated instantly."))
+        menu.addItem(windowItem("Show Last Notes", #selector(toggleLastNotes), key: "n", open: lastNotesWindow.isVisible,
+                                tip: "The last notes played in large type, newest on the left."))
 
         menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "MIDI Input"))
@@ -238,18 +300,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "Options"))
-        menu.addItem(toggleItem("Show Timestamp", key: Defaults.showTimestamp,
-                                tip: "Show the seconds.milliseconds timestamp in the list above."))
-        menu.addItem(toggleItem("Show Device Name", key: Defaults.showDeviceName,
-                                tip: "Show which MIDI input each event came from in the list above."))
-        menu.addItem(toggleItem("Show Channel", key: Defaults.showChannel,
-                                tip: "Show the MIDI channel (ch: 1–16) in the list above."))
-        menu.addItem(toggleItem("Show Clock & Active Sensing", key: Defaults.showContinuousRealtime,
-                                tip: "Some devices send these continuously. When hidden, they still light the indicator but are left out of the event lists."))
-        menu.addItem(toggleItem("Show Aftertouch", key: Defaults.showAftertouch,
-                                tip: "Poly and channel pressure. When hidden, they still light the indicator but are left out of the event lists."))
-
-        let login = item("Launch at Login", #selector(toggleLaunchAtLogin))
+        let login = item("Launch at Login", #selector(toggleLaunchAtLogin), key: "l")
+        login.keyEquivalentModifierMask = [.option]
         switch SMAppService.mainApp.status {
         case .enabled: login.state = .on
         case .requiresApproval: login.state = .mixed
@@ -258,7 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(login)
 
         menu.addItem(.separator())
-        menu.addItem(item("Check for Updates…", #selector(checkForUpdates)))
+        menu.addItem(item("Check for Updates…", #selector(checkForUpdates), key: "u"))
         let panic = item("MIDI Panic", #selector(sendPanic), key: "p")
         let outputs = monitor.destinationCount
         panic.isEnabled = outputs > 0
@@ -269,28 +321,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Quit MIDIstat", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
-    func updateEventItems() {
-        let shown = shownCategories
-        let events = Array(store.recent(Self.recentCount, including: shown))
-        let font = NSFont.monospacedSystemFont(ofSize: NSFont.menuFont(ofSize: 0).pointSize, weight: .regular)
-        for (index, item) in eventItems.enumerated() {
-            let text: String
-            if index < events.count {
-                text = MIDIFormat.line(for: events[index], includeTimestamp: showTimestamp,
-                                      includeSource: showDeviceName, includeChannel: showChannel)
-            } else if index == 0 && events.isEmpty {
-                text = "No MIDI events yet"
-            } else {
-                item.isHidden = true
-                continue
+    private static let fullTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    /// The last event in three lines: time, device and channel, event.
+    func updateLastEventItems() {
+        guard lastEventItems.count == 3 else { return }
+        let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuFont(ofSize: 0).pointSize, weight: .regular)
+        let label: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
+        let value: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
+        func line(_ parts: [(String, String)]) -> NSAttributedString {
+            let text = NSMutableAttributedString()
+            for (index, (name, content)) in parts.enumerated() {
+                if index > 0 { text.append(NSAttributedString(string: "    ", attributes: value)) }
+                text.append(NSAttributedString(string: "\(name): ", attributes: label))
+                text.append(NSAttributedString(string: content, attributes: value))
             }
-            item.isHidden = false
-            item.attributedTitle = NSAttributedString(string: text, attributes: [.font: font])
+            return text
         }
 
-        let summary = store.hiddenSummary(shown: shown)
-        hiddenCountItem?.isHidden = summary == nil
-        hiddenCountItem?.title = summary ?? ""
+        // Everything, aftertouch included: the menu is the quick "is anything arriving?" check.
+        guard let event = store.recent(1, including: .all).last else {
+            lastEventItems[0].attributedTitle = NSAttributedString(string: "No MIDI events yet", attributes: label)
+            lastEventItems[1].isHidden = true
+            lastEventItems[2].isHidden = true
+            return
+        }
+        var source: [(String, String)] = [("Device", event.source ?? "unknown")]
+        if let channel = event.channel { source.append(("Channel", String(channel))) }
+        lastEventItems[0].attributedTitle = line([("Time", Self.fullTime.string(from: event.date))])
+        lastEventItems[1].attributedTitle = line(source)
+        lastEventItems[2].attributedTitle = line([("Event", MIDIFormat.description(of: event.kind))])
+        lastEventItems[1].isHidden = false
+        lastEventItems[2].isHidden = false
+    }
+
+    /// MIDI Clock and Active Sensing lines, shown only while they arrive.
+    func updateRealtimeItems() {
+        let now = Date()
+        for (item, text) in [(clockItem, clock.summary(at: now)), (activeSensingItem, activeSensing.summary(at: now))] {
+            guard let item else { continue }
+            item.isHidden = text == nil
+            if let text {
+                item.attributedTitle = NSAttributedString(string: text, attributes: [
+                    .font: NSFont.menuFont(ofSize: NSFont.smallSystemFontSize),
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                ])
+            }
+        }
     }
 
     private func addInputItems(to menu: NSMenu) {
@@ -329,11 +410,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    /// A checkmark item bound to a Bool in UserDefaults.
-    private func toggleItem(_ title: String, key: String, tip: String) -> NSMenuItem {
-        let toggle = item(title, #selector(toggleOption(_:)))
-        toggle.representedObject = key
-        toggle.state = defaults.bool(forKey: key) ? .on : .off
+    /// A window toggle: checked while the window is open.
+    private func windowItem(_ title: String, _ action: Selector, key: String, open: Bool, tip: String) -> NSMenuItem {
+        let toggle = item(title, action, key: key)
+        toggle.state = open ? .on : .off
         toggle.toolTip = tip
         return toggle
     }
@@ -351,8 +431,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.async { self.logWindow.show() }
     }
 
-    /// The status menu item is a toggle, like Show Last Notes: checked while the
-    /// window is open, choosing it again closes the window.
+    /// The status menu item is a toggle, like the other windows: checked while
+    /// the window is open, choosing it again closes the window.
     @objc private func toggleLogFromMenu() {
         if logWindow.isVisible {
             logWindow.closeLog()
@@ -368,6 +448,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             showLog()
         }
+    }
+
+    /// ⌘F: the filter field of the log window.
+    @objc private func focusLogFilter() {
+        logWindow.focusFilter()
     }
 
     @objc private func selectAllInputs() {
@@ -392,6 +477,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor.selection = selection
         updateIcon()
         if isMenuOpen { rebuildMenu() }
+    }
+
+    /// ⌘E: shows or hides the Last Events window; the choice is remembered.
+    @objc private func toggleLastEvents() {
+        setLastEventsVisible(!lastEventsWindow.isVisible)
+    }
+
+    func setLastEventsVisible(_ show: Bool) {
+        defaults.set(show, forKey: Defaults.showLastEvents)
+        if show {
+            lastEventsWindow.show()
+        } else {
+            lastEventsWindow.hide()
+        }
     }
 
     /// ⌘N: shows or hides the Last Notes panel; the choice is remembered.
@@ -501,22 +600,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func sendPanic() {
         monitor.sendPanic()
-    }
-
-    @objc private func toggleOption(_ sender: NSMenuItem) {
-        guard let key = sender.representedObject as? String else { return }
-        setOption(key, !defaults.bool(forKey: key))
-    }
-
-    /// Sets one of the Bool options shown in the menu (a `Defaults` key).
-    func setOption(_ key: String, _ value: Bool) {
-        switch key {
-        case Defaults.showContinuousRealtime: setCategory(.continuousRealtime, shown: value)
-        case Defaults.showAftertouch: setCategory(.aftertouch, shown: value)
-        default:
-            defaults.set(value, forKey: key)
-            if isMenuOpen { updateEventItems() }
-        }
     }
 
     @objc private func toggleLaunchAtLogin() {

@@ -33,6 +33,11 @@ final class LastNotesWindowController: NSWindowController, NSWindowDelegate {
     private let placeholder = NSTextField(labelWithString: "Play a note…")
     private let onTopCheckbox = NSButton(checkboxWithTitle: "Always on Top", target: nil, action: nil)
     private let extraLargeCheckbox = NSButton(checkboxWithTitle: "X-Large Font", target: nil, action: nil)
+    private let countLabel = NSTextField(labelWithString: "Notes count: 0")
+    private let resetButton = NSButton(title: "Reset", target: nil, action: nil)
+
+    /// Called by the Reset button next to the notes count.
+    var onResetCount: (() -> Void)?
 
     /// Newest first.
     private var history: [UInt8] = []
@@ -40,6 +45,7 @@ final class LastNotesWindowController: NSWindowController, NSWindowDelegate {
     private var noteViews: [NoteGlyphView] = []
 
     private let margin: CGFloat = 14
+    private var controlsWidth: CGFloat = 0
     private let controlsHeight: CGFloat = 34
     private let dimmedAlpha: CGFloat = 0.3
 
@@ -98,23 +104,49 @@ final class LastNotesWindowController: NSWindowController, NSWindowDelegate {
             x += checkbox.frame.width + 16
         }
 
+        // Notes count (key presses since MIDIstat started) on the right.
+        resetButton.target = self
+        resetButton.action = #selector(resetCount)
+        resetButton.controlSize = .mini
+        resetButton.bezelStyle = .push
+        resetButton.font = .systemFont(ofSize: NSFont.systemFontSize(for: .mini))
+        resetButton.toolTip = "Reset the notes count"
+        resetButton.sizeToFit()
+        countLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        countLabel.textColor = .secondaryLabelColor
+        countLabel.alignment = .right
+        let width = content.bounds.width
+        resetButton.setFrameOrigin(NSPoint(x: width - margin - resetButton.frame.width, y: 8))
+        countLabel.frame = NSRect(x: resetButton.frame.minX - 116, y: 10, width: 110, height: 16)
+        for view in [countLabel, resetButton] as [NSView] {
+            view.autoresizingMask = [.minXMargin, .maxYMargin]
+            content.addSubview(view)
+        }
+        // Option checkboxes + count + Reset must fit, even at the minimum width.
+        controlsWidth = x + 116 + resetButton.frame.width + margin
+
         panel.contentView = content
     }
 
     // MARK: - Showing
 
-    var isVisible: Bool { window?.isVisible == true }
+    /// Also true while hidden, waiting to come back on a regular desktop.
+    var isVisible: Bool { window?.isShownOrWaiting == true }
 
     /// Shows the panel without taking the focus away from the current app.
     func show() {
+        if let window { DesktopReturn.cancel(window) }  // opened explicitly: show it here
+        countLabel.stringValue = "Notes count: \(noteCount)"
         window?.orderFrontRegardless()
     }
 
     func hide() {
+        if let window { DesktopReturn.cancel(window) }
         window?.orderOut(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
+        if let window { DesktopReturn.cancel(window) }
         onClose?()
     }
 
@@ -227,7 +259,7 @@ final class LastNotesWindowController: NSWindowController, NSWindowDelegate {
         guard let window else { return }
         let height = stageHeight + controlsHeight
         let screenWidth = (window.screen ?? NSScreen.main)?.visibleFrame.width ?? 1440
-        let minWidth = margin * 2 + slotWidth * CGFloat(Self.minimumNoteCount)
+        let minWidth = max(margin * 2 + slotWidth * CGFloat(Self.minimumNoteCount), controlsWidth)
         window.contentMinSize = NSSize(width: minWidth, height: height)
         window.contentMaxSize = NSSize(width: max(minWidth, screenWidth), height: height)
     }
@@ -255,19 +287,24 @@ final class LastNotesWindowController: NSWindowController, NSWindowDelegate {
         applyAlwaysOnTop()
     }
 
-    /// On top: floats above other windows on every Space, full-screen apps included.
-    /// Not on top: an ordinary window that stays on the Space (desktop) where it is.
     private func applyAlwaysOnTop() {
-        let onTop = settings.alwaysOnTop
-        onTopCheckbox.state = onTop ? .on : .off
-        guard let window else { return }
-        window.level = onTop ? .floating : .normal
-        window.collectionBehavior = onTop ? [.canJoinAllSpaces, .fullScreenAuxiliary] : [.managed]
-        // Space membership is re-evaluated when the window is ordered in again.
-        if window.isVisible {
-            window.orderOut(nil)
-            window.orderFrontRegardless()
-        }
+        onTopCheckbox.state = settings.alwaysOnTop ? .on : .off
+        window?.setAlwaysOnTop(settings.alwaysOnTop)
+    }
+
+    // MARK: - Notes count
+
+    /// Updating the label of a hidden window still costs text layout and
+    /// drawing, so the count is only shown while the window is visible.
+    func setNoteCount(_ count: Int) {
+        noteCount = count
+        if window?.isVisible == true { countLabel.stringValue = "Notes count: \(count)" }
+    }
+
+    private var noteCount = 0
+
+    @objc private func resetCount() {
+        onResetCount?()
     }
 }
 

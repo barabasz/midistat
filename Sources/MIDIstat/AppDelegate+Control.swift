@@ -8,29 +8,46 @@ import ServiceManagement
 extension AppDelegate {
     static let controlUsage = [
         "ver                            the MIDIstat version",
-        "status                         the whole state: indicator, input, options, windows, event counts",
+        "status                         the whole state: indicator, input, options, windows, clock, counts",
         "devices                        MIDI inputs and outputs seen by MIDIstat",
         "updates                        check GitHub for a newer release and list the changes (does not install)",
-        "events [N]                     the last N events as shown in the lists (default 10, max 1000)",
-        "set <option> <on|off|toggle>   options: timestamp, device-name, channel, clock, aftertouch,",
+        "events [N]                     the last N events, filtered like Last Events (default 10, max 1000)",
+        "set <option> <on|off|toggle>   options: events-timestamp, events-device, events-channel,",
+        "                               events-aftertouch, events-on-top, log-aftertouch, log-on-top,",
         "                               notes-on-top, notes-xlarge, launch-at-login",
         "input all | input <name|ID>    listen to all inputs, or to one (exact name or unique ID)",
-        "open <log|notes>               show a window (without taking the focus)",
-        "close <log|notes>              hide a window",
-        "clear-log                      clear the event history (log window and menu list)",
+        "open <log|events|notes>        show a window (without taking the focus)",
+        "close <log|events|notes>       hide a window",
+        "clear-log                      clear the event history (log, Last Events, menu)",
+        "reset-notes                    reset the notes count in Last Notes",
         "panic                          send MIDI panic to all outputs",
         "help                           this list",
     ]
 
-    /// Option names of `set` and of `status.options`, mapped to UserDefaults keys
-    /// (the Last Notes and login options are handled separately).
-    private static let listOptions: [String: String] = [
-        "timestamp": Defaults.showTimestamp,
-        "device-name": Defaults.showDeviceName,
-        "channel": Defaults.showChannel,
-        "clock": Defaults.showContinuousRealtime,
-        "aftertouch": Defaults.showAftertouch,
-    ]
+    /// The options of `set` and `status.options`: how to read and change each one.
+    private var controlOptions: [String: (get: () -> Bool, set: (Bool) -> Void)] {
+        func events(_ keyPath: WritableKeyPath<LastEventsWindowController.Settings, Bool>) -> (get: () -> Bool, set: (Bool) -> Void) {
+            (get: { self.lastEventsWindow.settings[keyPath: keyPath] },
+             set: { value in
+                 var settings = self.lastEventsWindow.settings
+                 settings[keyPath: keyPath] = value
+                 self.lastEventsWindow.update(settings)
+             })
+        }
+        return [
+            "events-timestamp": events(\.timestamp),
+            "events-device": events(\.device),
+            "events-channel": events(\.channel),
+            "events-aftertouch": events(\.aftertouch),
+            "events-on-top": events(\.alwaysOnTop),
+            "log-aftertouch": (get: { self.logWindow.settings.aftertouch }, set: { self.logWindow.setAftertouch($0) }),
+            "log-on-top": (get: { self.logWindow.settings.alwaysOnTop }, set: { self.logWindow.setAlwaysOnTop($0) }),
+            "notes-on-top": (get: { self.lastNotesWindow.settings.alwaysOnTop },
+                             set: { self.lastNotesWindow.setAlwaysOnTop($0) }),
+            "notes-xlarge": (get: { self.lastNotesWindow.settings.extraLargeFont },
+                             set: { self.lastNotesWindow.setExtraLargeFont($0) }),
+        ]
+    }
 
     private struct ControlError: Error, CustomStringConvertible {
         let description: String
@@ -75,7 +92,7 @@ extension AppDelegate {
                     guard let n = Int(argument), n > 0 else { throw ControlError("events: N must be a positive number") }
                     count = min(n, 1000)
                 }
-                let events = store.recent(count, including: shownCategories).map(eventJSON)
+                let events = store.recent(count, including: lastEventsCategories).map(eventJSON)
                 return json(["ok": true, "events": events])
             case "set":
                 guard arguments.count == 2 else { throw ControlError("usage: set <option> <on|off|toggle>") }
@@ -86,11 +103,14 @@ extension AppDelegate {
                 let open = command == "open"
                 switch arguments.first?.lowercased() {
                 case "log": open ? logWindow.show(takeFocus: false) : logWindow.closeLog()
+                case "events": setLastEventsVisible(open)
                 case "notes": setLastNotesVisible(open)
-                default: throw ControlError("usage: \(command) <log|notes>")
+                default: throw ControlError("usage: \(command) <log|events|notes>")
                 }
             case "clear-log":
                 clearLog()
+            case "reset-notes":
+                resetNotesCount()
             case "panic":
                 return json(["ok": true, "outputs": monitor.sendPanic()])
             default:
@@ -138,15 +158,11 @@ extension AppDelegate {
             default: throw ControlError("value must be on, off or toggle")
             }
         }
-        if let key = Self.listOptions[name] {
-            setOption(key, try newValue(current: defaults.bool(forKey: key)))
+        if let option = controlOptions[name] {
+            option.set(try newValue(current: option.get()))
             return
         }
         switch name {
-        case "notes-on-top":
-            lastNotesWindow.setAlwaysOnTop(try newValue(current: lastNotesWindow.settings.alwaysOnTop))
-        case "notes-xlarge":
-            lastNotesWindow.setExtraLargeFont(try newValue(current: lastNotesWindow.settings.extraLargeFont))
         case "launch-at-login":
             let service = SMAppService.mainApp
             let enable = try newValue(current: service.status == .enabled)
@@ -156,7 +172,7 @@ extension AppDelegate {
                 throw ControlError("launch-at-login: \(error.localizedDescription)")
             }
         default:
-            let all = (Self.listOptions.keys + ["notes-on-top", "notes-xlarge", "launch-at-login"]).sorted()
+            let all = (controlOptions.keys + ["launch-at-login"]).sorted()
             throw ControlError("unknown option '\(name)'; options: \(all.joined(separator: ", "))")
         }
     }
@@ -200,12 +216,16 @@ extension AppDelegate {
         case .notFound: login = "off (app not registered)"
         default: login = "off"
         }
-        var options: [String: Any] = Self.listOptions.mapValues { defaults.bool(forKey: $0) }
-        options["notes-on-top"] = lastNotesWindow.settings.alwaysOnTop
-        options["notes-xlarge"] = lastNotesWindow.settings.extraLargeFont
+        var options: [String: Any] = controlOptions.mapValues { $0.get() }
         options["launch-at-login"] = login
 
-        let shown = shownCategories
+        let now = Date()
+        var clockStatus: [String: Any] = ["present": clock.isPresent(at: now)]
+        if clock.isPresent(at: now) {
+            clockStatus["bpm"] = clock.bpm.map { ($0 * 10).rounded() / 10 } ?? NSNull()
+            clockStatus["transport"] = clock.transport.rawValue
+            clockStatus["device"] = clock.source ?? NSNull()
+        }
         return [
             "app": [
                 "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "development build",
@@ -222,14 +242,16 @@ extension AppDelegate {
             "options": options,
             "windows": [
                 "log": ["open": logWindow.isVisible],
+                "events": ["open": lastEventsWindow.isVisible],
                 "notes": ["open": lastNotesWindow.isVisible, "notesShown": lastNotesWindow.visibleCount],
             ],
             "events": [
                 "stored": store.events(including: .all).count,
-                "inLists": store.events(including: shown).count,
-                "hiddenClockAndActiveSensing": shown.contains(.continuousRealtime) ? 0 : store.count(of: .continuousRealtime),
-                "hiddenAftertouch": shown.contains(.aftertouch) ? 0 : store.count(of: .aftertouch),
+                "aftertouch": store.count(of: .aftertouch),
             ],
+            "notesCount": notesCount,
+            "clock": clockStatus,
+            "activeSensing": activeSensing.devices(at: now),
         ]
     }
 
