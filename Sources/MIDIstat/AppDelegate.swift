@@ -627,33 +627,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static func updateAlert(for check: Updater.Check) -> NSAlert {
         let alert = NSAlert()
         alert.messageText = "MIDIstat \(check.latest.version) is available"
-        let changes = check.changes.shown.map { "• \($0)" }.joined(separator: "\n")
         alert.informativeText = "You have version \(check.current)."
-            + (changes.isEmpty ? "" : "\n\nWhat’s new:\n\(changes)")
 
-        // NSAlert's text cannot contain links, so the rest goes into an accessory view.
-        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        // The changes go into an accessory view: NSAlert's own text cannot contain
+        // links, and it is narrow; the accessory's width sets the alert's width,
+        // so the changes fit on fewer lines.
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let small = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         let text = NSMutableAttributedString()
         func add(_ string: String, _ attributes: [NSAttributedString.Key: Any] = [:]) {
             text.append(NSAttributedString(string: string, attributes: [.font: font].merging(attributes) { $1 }))
         }
-        if check.changes.more > 0 {
-            add("…and \(check.changes.more) more. ")
-            add("See all changes", [.link: check.allChangesURL])
-            add("\n\n")
-        } else if !check.changes.shown.isEmpty {
-            add("See all changes", [.link: check.allChangesURL])
-            add("\n\n")
+        if !check.changes.shown.isEmpty {
+            let bullets = NSMutableParagraphStyle()
+            bullets.headIndent = ("• " as NSString).size(withAttributes: [.font: font]).width  // wrapped lines align with the text
+            bullets.paragraphSpacing = 3
+            add("What’s new:\n", [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)])
+            add(check.changes.shown.map { "• \($0)" }.joined(separator: "\n") + "\n", [.paragraphStyle: bullets])
+            add("\n", [.font: small])
+            if check.changes.more > 0 { add("…and \(check.changes.more) more. ", [.font: small]) }
+            add("See all changes", [.font: small, .link: check.allChangesURL])
+            add("\n\n", [.font: small])
         }
         add("Upgrade downloads the new version, replaces this one and restarts MIDIstat.",
-            [.foregroundColor: NSColor.secondaryLabelColor])
+            [.font: small, .foregroundColor: NSColor.secondaryLabelColor])
 
+        let width: CGFloat = 520
         let field = NSTextField(labelWithAttributedString: text)
         field.isSelectable = true               // needed for the link to be clickable
         field.allowsEditingTextAttributes = true
-        field.preferredMaxLayoutWidth = 260
-        field.frame.size = field.fittingSize
-        alert.accessoryView = field
+        // Inset so that the text lines up with the alert's own text (measured: 4 points).
+        let inset: CGFloat = 4
+        field.preferredMaxLayoutWidth = width - inset
+        let height = field.fittingSize.height
+        field.frame = NSRect(x: inset, y: 0, width: width - inset, height: height)
+        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        accessory.addSubview(field)
+        alert.accessoryView = accessory
 
         alert.addButton(withTitle: "Upgrade")
         alert.addButton(withTitle: "Cancel")
