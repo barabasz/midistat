@@ -32,14 +32,14 @@ PID="$(echo "$STATUS" | json 'd["status"]["app"]["pid"]')"
 VERSION="$(echo "$STATUS" | json 'd["status"]["app"]["version"]')"
 WAS_OPEN="$(echo "$STATUS" | json '" ".join(k for k, v in d["status"]["windows"].items() if v["open"])')"
 STORED_BEFORE="$(echo "$STATUS" | json 'd["status"]["events"]["stored"]')"
-NOTES_BEFORE="$(echo "$STATUS" | json 'd["status"]["notesCount"]')"
+NOTES_BEFORE="$(echo "$STATUS" | json 'd["status"]["stats"]["notesSinceReset"]')"
 
 cpu_seconds() { ps -o time= -p "$PID" | awk -F: '{ if (NF == 3) print $1 * 3600 + $2 * 60 + $3; else print $1 * 60 + $2 }'; }
 memory() { top -l 1 -pid "$PID" -stats mem | tail -1 | tr -d ' +-'; }
 now() { perl -MTime::HiRes=time -e 'printf "%.3f", time'; }
 
 windows() {  # windows <log|events|notes …>: exactly these open
-    for w in log events notes; do
+    for w in log events notes stats; do
         if [[ " $* " == *" $w "* ]]; then ctl open "$w" >/dev/null; else ctl close "$w" >/dev/null; fi
     done
     sleep 1
@@ -69,8 +69,8 @@ loads() {
 
 echo "MIDIstat $VERSION (pid $PID), $RUN s per measurement. CPU: % of one core (average)."
 echo
-for set in "" "log" "events" "notes" "log events notes"; do
-    [[ $QUICK == 1 && ( "$set" == "log" || "$set" == "events" || "$set" == "notes" ) ]] && continue
+for set in "" "log" "events" "notes" "stats" "log events notes stats"; do
+    [[ $QUICK == 1 && ( "$set" == "log" || "$set" == "events" || "$set" == "notes" || "$set" == "stats" ) ]] && continue
     echo "Windows: ${set:-none (menu bar icon only)}"
     printf "  %-34s %8s   %s\n" "load" "CPU" "memory"
     windows $set
@@ -81,7 +81,7 @@ done
 # Restore: windows, and the history / notes count if they were empty before.
 windows $WAS_OPEN
 [[ "$STORED_BEFORE" == "0" ]] && ctl clear-log >/dev/null
-[[ "$NOTES_BEFORE" == "0" ]] && ctl reset-notes >/dev/null
+[[ "$NOTES_BEFORE" == "0" ]] && ctl reset-stats >/dev/null
 echo "Restored the windows that were open (${WAS_OPEN:-none})."
 [[ "$STORED_BEFORE" != "0" ]] && echo "Note: the test events remain in the event history (it was not empty before)."
 exit 0

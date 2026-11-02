@@ -20,6 +20,12 @@ enum Defaults {
     static let showLastNotes = "showLastNotes"
     static let lastNotesAlwaysOnTop = "lastNotesAlwaysOnTop"
     static let lastNotesExtraLargeFont = "lastNotesExtraLargeFont"
+    static let lastNotesVelocity = "lastNotesVelocity"
+    static let lastNotesColored = "lastNotesColored"
+    static let lastNotesValues = "lastNotesValues"
+    // Statistics window
+    static let showStatistics = "showStatistics"
+    static let statisticsAlwaysOnTop = "statisticsAlwaysOnTop"
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -30,21 +36,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let store = EventStore()
     let clock = ClockTracker()
     let activeSensing = ActiveSensingTracker()
-    /// Key presses (Note On) since MIDIstat started, shown in Last Notes.
-    private(set) var notesCount = 0
+    /// Statistics of the key presses (Note On), shown in the Statistics window.
+    let noteStats = NoteStats()
     private var statusItem: NSStatusItem!
     var startError: String?
 
-    lazy var logWindow = LogWindowController(
-        store: store,
-        settings: .init(aftertouch: defaults.bool(forKey: Defaults.logShowAftertouch),
-                        alwaysOnTop: defaults.bool(forKey: Defaults.logAlwaysOnTop)),
-        saveSettings: { [unowned self] settings in
-            self.defaults.set(settings.aftertouch, forKey: Defaults.logShowAftertouch)
-            self.defaults.set(settings.alwaysOnTop, forKey: Defaults.logAlwaysOnTop)
-        },
-        deviceNames: { [unowned self] in self.monitor.sources.map(\.name) },
-        onClear: { [unowned self] in self.clearLog() })
+    lazy var logWindow: LogWindowController = {
+        let controller = LogWindowController(
+            store: store,
+            settings: .init(aftertouch: defaults.bool(forKey: Defaults.logShowAftertouch),
+                            alwaysOnTop: defaults.bool(forKey: Defaults.logAlwaysOnTop)),
+            saveSettings: { [unowned self] settings in
+                self.defaults.set(settings.aftertouch, forKey: Defaults.logShowAftertouch)
+                self.defaults.set(settings.alwaysOnTop, forKey: Defaults.logAlwaysOnTop)
+            },
+            deviceNames: { [unowned self] in self.monitor.sources.map(\.name) },
+            onClear: { [unowned self] in self.clearLog() })
+        return controller
+    }()
 
     lazy var lastEventsWindow: LastEventsWindowController = {
         let controller = LastEventsWindowController(
@@ -70,15 +79,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     lazy var lastNotesWindow: LastNotesWindowController = {
         let controller = LastNotesWindowController(
             settings: .init(alwaysOnTop: defaults.bool(forKey: Defaults.lastNotesAlwaysOnTop),
-                            extraLargeFont: defaults.bool(forKey: Defaults.lastNotesExtraLargeFont)),
+                            extraLargeFont: defaults.bool(forKey: Defaults.lastNotesExtraLargeFont),
+                            velocity: defaults.bool(forKey: Defaults.lastNotesVelocity),
+                            colored: defaults.bool(forKey: Defaults.lastNotesColored),
+                            values: defaults.bool(forKey: Defaults.lastNotesValues)),
             saveSettings: { [unowned self] settings in
                 self.defaults.set(settings.alwaysOnTop, forKey: Defaults.lastNotesAlwaysOnTop)
                 self.defaults.set(settings.extraLargeFont, forKey: Defaults.lastNotesExtraLargeFont)
+                self.defaults.set(settings.velocity, forKey: Defaults.lastNotesVelocity)
+                self.defaults.set(settings.colored, forKey: Defaults.lastNotesColored)
+                self.defaults.set(settings.values, forKey: Defaults.lastNotesValues)
             })
         // Closing the panel with its close button turns the option off.
         controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showLastNotes) }
-        controller.onResetCount = { [unowned self] in self.resetNotesCount() }
-        controller.setNoteCount(notesCount)
+        return controller
+    }()
+
+    lazy var statisticsWindow: StatisticsWindowController = {
+        let controller = StatisticsWindowController(
+            stats: noteStats,
+            settings: .init(alwaysOnTop: defaults.bool(forKey: Defaults.statisticsAlwaysOnTop)),
+            saveSettings: { [unowned self] settings in
+                self.defaults.set(settings.alwaysOnTop, forKey: Defaults.statisticsAlwaysOnTop)
+            },
+            onReset: { [unowned self] in self.resetNoteStats() })
+        // Closing the panel with its close button turns the option off.
+        controller.onClose = { [unowned self] in self.defaults.set(false, forKey: Defaults.showStatistics) }
         return controller
     }()
 
@@ -114,6 +140,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Defaults.showLastNotes: false,
             Defaults.lastNotesAlwaysOnTop: true,
             Defaults.lastNotesExtraLargeFont: false,
+            Defaults.lastNotesVelocity: false,
+            Defaults.lastNotesColored: false,
+            Defaults.lastNotesValues: false,
+            Defaults.showStatistics: false,
+            Defaults.statisticsAlwaysOnTop: true,
         ])
         defaults.removeObject(forKey: "showContinuousRealtime")  // option removed in 0.7
         NSApp.mainMenu = makeMainMenu()
@@ -140,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateIcon()
         if defaults.bool(forKey: Defaults.showLastEvents) { lastEventsWindow.show() }
         if defaults.bool(forKey: Defaults.showLastNotes) { lastNotesWindow.show() }
+        if defaults.bool(forKey: Defaults.showStatistics) { statisticsWindow.show() }
         startControlServer()
     }
 
@@ -170,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item("Toggle Full Log", #selector(toggleLog), key: "l"),
             item("Show Last Events", #selector(toggleLastEvents), key: "e"),
             item("Show Last Notes", #selector(toggleLastNotes), key: "n"),
+            item("Show Statistics", #selector(toggleStatistics), key: "s"),
             NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"),
             NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"),
         ])
@@ -192,10 +225,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if isMenuOpen { updateLastEventItems() }
         logWindow.eventsDidChange()
         lastEventsWindow.eventsDidChange()
-        if case let .noteOn(note, _) = event.kind {
-            notesCount += 1
-            lastNotesWindow.setNoteCount(notesCount)
-            if lastNotesWindow.isVisible { lastNotesWindow.add(note: note) }
+        if case let .noteOn(note, velocity) = event.kind {
+            noteStats.add(note: note, velocity: velocity, at: event.date)
+            statisticsWindow.statsDidChange()
+            if lastNotesWindow.isVisible { lastNotesWindow.add(note: note, velocity: velocity) }
         }
     }
 
@@ -206,9 +239,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if isMenuOpen { updateLastEventItems() }
     }
 
-    func resetNotesCount() {
-        notesCount = 0
-        lastNotesWindow.setNoteCount(0)
+    /// Resets all statistics except the notes since start.
+    func resetNoteStats() {
+        noteStats.reset()
+        statisticsWindow.statsDidChange()
     }
 
     /// One pending timer that turns the green indicator off 1 s after the last message.
@@ -294,6 +328,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                 tip: "A compact window with the most recent events, updated instantly."))
         menu.addItem(windowItem("Show Last Notes", #selector(toggleLastNotes), key: "n", open: lastNotesWindow.isVisible,
                                 tip: "The last notes played in large type, newest on the left."))
+        menu.addItem(windowItem("Show Statistics", #selector(toggleStatistics), key: "s", open: statisticsWindow.isVisible,
+                                tip: "Notes count, notes per minute, velocity and range of the notes played."))
 
         menu.addItem(.separator())
         menu.addItem(.sectionHeader(title: "MIDI Input"))
@@ -505,6 +541,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             lastNotesWindow.show()
         } else {
             lastNotesWindow.hide()
+        }
+    }
+
+    /// ⌘S: shows or hides the Statistics panel; the choice is remembered.
+    @objc private func toggleStatistics() {
+        setStatisticsVisible(!statisticsWindow.isVisible)
+    }
+
+    func setStatisticsVisible(_ show: Bool) {
+        defaults.set(show, forKey: Defaults.showStatistics)
+        if show {
+            statisticsWindow.show()
+        } else {
+            statisticsWindow.hide()
         }
     }
 

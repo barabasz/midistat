@@ -32,7 +32,7 @@ Click the icon to open the menu. Its first line shows the installed version, e.g
   MIDI Clock: 120.0 BPM, running (Ableton Live)
   Active Sensing: Yamaha P-125
   ```
-- **Floating Windows**: **Show Full Log** (⌘L), **Show Last Events** (⌘E), **Show Last Notes** (⌘N) show or hide the three windows described below. Each item is checked while its window is open.
+- **Floating Windows**: **Show Full Log** (⌘L), **Show Last Events** (⌘E), **Show Last Notes** (⌘N), **Show Statistics** (⌘S) show or hide the four windows described below. Each item is checked while its window is open.
 - **MIDI Input**:
   - **Listen to All MIDI Inputs** (⌘A), or
   - one specific input. Inputs are listed live as devices are connected and disconnected. A selected input that is currently unplugged appears as `Name (disconnected)`.
@@ -86,16 +86,41 @@ The log keeps up to the 100,000 most recent messages. The counter says so when t
 **Show Last Notes** opens a small window, *MIDIstat — Last Notes*, with the last notes played, in large type, for example G₄ C♯₄ D₄ A₅ F♯₄. It is handy when learning: keep it open, press keys and see what you played.
 
 - The newest note appears on the left with a short slide-and-fade animation and pushes the older notes to the right. The oldest note slides out.
-- The newest note is shown at full contrast; the older ones are dimmed.
+- The newest note is shown at full contrast; the older ones are dimmed. In light mode only their letters are dimmed: the velocity meters keep full contrast, which faint colours on white would otherwise lack.
 - Each note is a large bold letter with a small column to its right. The sharp sign, if any, is on top, level with the top of the letter. The octave number, in a light weight, is at the bottom, on the letter's baseline. Middle C is C4.
-- **Notes count**: how many keys were pressed since MIDIstat started (each Note On counts, also while the window is closed). **Reset** sets it back to 0, e.g. to count the notes in one exercise.
-- **Resizable horizontally**: by default the window shows 5 notes. Drag its edge to make it wider, up to the full screen width, and more notes fit. Notes played earlier appear at once. It cannot be made narrower than 5 notes, and the height is fixed.
-- **X-Large Font** (default off) doubles the size of the notes. The window grows taller and keeps showing the same number of notes, as long as they fit on the screen.
+- **Velocity** (default off) shows how hard each key was pressed: a meter of 16 thin bars under every note, lit from the bottom. Velocity 0–7 lights 1 bar, 8–15 two bars, and so on up to 120–127, all 16. The window grows taller to make room.
+- **Colored** (default off, shown only with Velocity) colours the meters like a level meter: bars 1–10 green (velocity 0–79, *ppp* to *mf*), 11–14 yellow (80–111, *f* to *ff*), 15–16 red (112–127, *fff*). In light mode, orange replaces yellow, which is hard to see on white, and the green is deeper.
+- **Values** (default off, shown only with Velocity) shows the velocity value (1–127) in a black box under each meter.
+- **Resizable horizontally**: by default the window shows 8 notes. Drag its edge to make it wider, up to the full screen width, and more notes fit. Notes played earlier appear at once. It cannot be made narrower than 8 notes, and the height is fixed.
+- **X-Large** (default off) doubles the size of the notes and the velocity meters. The window grows taller and keeps showing the same number of notes, as long as they fit on the screen.
 - Only key presses (Note On) are shown. Releases and other MIDI messages are ignored. Pressing the same key again adds it again.
 - **Always on Top** (default on), see [Windows](#windows).
 - The window never takes the focus away from the app you are using.
 - If the window is open when you quit MIDIstat, it opens again at the next launch, with the same position, width and options. Closing it turns the option off.
 - With *Reduce motion* turned on in System Settings → Accessibility, notes appear without animation.
+
+### Statistics window
+
+**Show Statistics** opens a small window, *MIDIstat — Statistics*, with a table of figures about the keys pressed (Note On), for example to measure an exercise:
+
+| Section | Row | Meaning |
+|---|---|---|
+| Notes | Since start | Key presses since MIDIstat started, also while the window is closed. Reset does not change it. |
+| | Since reset | Key presses since the last Reset. |
+| Notes per minute | Average since reset | From the first note after Reset until now, pauses included. |
+| | Last minute | Your current pace: the notes of the last 60 seconds. |
+| | Last 15 seconds | The same over 15 seconds, as a pace per minute: it follows changes of pace sooner. |
+| | Peak (15 seconds) | The highest 15-second pace since Reset. |
+| Since reset | Time since first note | Time since the first note after Reset. |
+| | Note range | The lowest and the highest note played, e.g. `C3 – G5`. |
+| | Average velocity | How hard the keys were pressed on average, 1–127. |
+| | Velocity range | The softest and the hardest key press. |
+
+- **The pace** (last minute, last 15 seconds) is measured from the first note after a Reset or after a minute without playing. While you have played for less than the period, it is projected from the notes so far, so 8 notes in 2 seconds show 240 at once. After that it is the number of notes in the period, scaled to a minute. It drops back to 0 when you stop. The peak counts only full 15-second periods, so a quick first burst doesn't set it.
+- Values are updated as you play, and the paces and time every second. A dash means nothing was played since Reset.
+- **Always on Top** (default on), see [Windows](#windows).
+- **Reset** (or ⌘R after clicking the window) sets everything back except *Since start*.
+- The window never takes the focus away from the app you are using. If it is open when you quit MIDIstat, it opens again at the next launch, with the same position and option.
 
 ### Clock and Active Sensing
 
@@ -132,13 +157,13 @@ $MIDISTAT ctl events 5               # the last 5 events
 | `ver` | The installed version and build number. |
 | `devices` | The MIDI inputs (and whether MIDIstat is listening to each) and outputs that MIDIstat sees. |
 | `updates` | Checks GitHub for a newer release: the latest version, all changes since the installed one and a link to the full comparison. Does not install anything. |
-| `status` | Indicator state, selected input, available inputs and outputs, all options, which windows are open, MIDI Clock and Active Sensing, the notes count, event counts. |
+| `status` | Indicator state, selected input, available inputs and outputs, all options, which windows are open, MIDI Clock and Active Sensing, the statistics, event counts. |
 | `events [N]` | The last N events (default 10, max 1000), filtered like Last Events: time, device, channel, message. |
-| `set <option> <on\|off\|toggle>` | Options: `events-timestamp`, `events-device`, `events-channel`, `events-aftertouch`, `events-on-top`, `log-aftertouch`, `log-on-top`, `notes-on-top`, `notes-xlarge`, `launch-at-login`. |
+| `set <option> <on\|off\|toggle>` | Options: `events-timestamp`, `events-device`, `events-channel`, `events-aftertouch`, `events-on-top`, `log-aftertouch`, `log-on-top`, `notes-on-top`, `notes-xlarge`, `notes-velocity`, `notes-colored`, `notes-values`, `stats-on-top`, `launch-at-login`. |
 | `input all` / `input <name or ID>` | Listen to all inputs, or to one: its exact name (as in `status`) or unique ID. |
-| `open <log\|events\|notes>` / `close …` | Show or hide a window. Opening does not take the focus away from the app you are using. |
+| `open <log\|events\|notes\|stats>` / `close …` | Show or hide a window. Opening does not take the focus away from the app you are using. |
 | `clear-log` | Clear the event history, the same as **Clear Log**. |
-| `reset-notes` | Reset the notes count in Last Notes. |
+| `reset-stats` | Reset the statistics, the same as **Reset** in the Statistics window. |
 | `panic` | Send MIDI Panic to all outputs. |
 | `help` | List the commands. |
 
@@ -187,7 +212,7 @@ Windows: events
   16 notes/s                           5.64 %   35M
 ```
 
-CPU is the average share of one core. Afterwards the windows that were open are reopened, and the event history and notes count are cleared if they were empty before. Options: `--quick` (fewer combinations); environment `RUN_SECONDS` (seconds per measurement, default 10) and `MIDISTAT_BIN` (another app binary). The windows open and close on screen while it runs. Use it after changes to the windows or the event handling, to compare with earlier results.
+CPU is the average share of one core. Afterwards the windows that were open are reopened, and the event history and statistics are cleared if they were empty before. Options: `--quick` (fewer combinations); environment `RUN_SECONDS` (seconds per measurement, default 10) and `MIDISTAT_BIN` (another app binary). The windows open and close on screen while it runs. Use it after changes to the windows or the event handling, to compare with earlier results.
 
 **Launch at Login** works most reliably when the app is in `/Applications` (use `--install`). If macOS asks for approval, the System Settings → General → Login Items pane opens; in the menu the option then shows a dash (–) until it is approved.
 

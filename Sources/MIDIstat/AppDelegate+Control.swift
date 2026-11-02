@@ -14,12 +14,13 @@ extension AppDelegate {
         "events [N]                     the last N events, filtered like Last Events (default 10, max 1000)",
         "set <option> <on|off|toggle>   options: events-timestamp, events-device, events-channel,",
         "                               events-aftertouch, events-on-top, log-aftertouch, log-on-top,",
-        "                               notes-on-top, notes-xlarge, launch-at-login",
+        "                               notes-on-top, notes-xlarge, notes-velocity, notes-colored,",
+        "                               notes-values, stats-on-top, launch-at-login",
         "input all | input <name|ID>    listen to all inputs, or to one (exact name or unique ID)",
-        "open <log|events|notes>        show a window (without taking the focus)",
-        "close <log|events|notes>       hide a window",
+        "open <log|events|notes|stats>  show a window (without taking the focus)",
+        "close <log|events|notes|stats> hide a window",
         "clear-log                      clear the event history (log, Last Events, menu)",
-        "reset-notes                    reset the notes count in Last Notes",
+        "reset-stats                    reset the statistics (all but the notes since start)",
         "panic                          send MIDI panic to all outputs",
         "help                           this list",
     ]
@@ -46,6 +47,14 @@ extension AppDelegate {
                              set: { self.lastNotesWindow.setAlwaysOnTop($0) }),
             "notes-xlarge": (get: { self.lastNotesWindow.settings.extraLargeFont },
                              set: { self.lastNotesWindow.setExtraLargeFont($0) }),
+            "notes-velocity": (get: { self.lastNotesWindow.settings.velocity },
+                               set: { self.lastNotesWindow.setVelocity($0) }),
+            "notes-colored": (get: { self.lastNotesWindow.settings.colored },
+                              set: { self.lastNotesWindow.setColored($0) }),
+            "notes-values": (get: { self.lastNotesWindow.settings.values },
+                             set: { self.lastNotesWindow.setValues($0) }),
+            "stats-on-top": (get: { self.statisticsWindow.settings.alwaysOnTop },
+                             set: { self.statisticsWindow.setAlwaysOnTop($0) }),
         ]
     }
 
@@ -105,12 +114,13 @@ extension AppDelegate {
                 case "log": open ? logWindow.show(takeFocus: false) : logWindow.closeLog()
                 case "events": setLastEventsVisible(open)
                 case "notes": setLastNotesVisible(open)
-                default: throw ControlError("usage: \(command) <log|events|notes>")
+                case "stats": setStatisticsVisible(open)
+                default: throw ControlError("usage: \(command) <log|events|notes|stats>")
                 }
             case "clear-log":
                 clearLog()
-            case "reset-notes":
-                resetNotesCount()
+            case "reset-stats":
+                resetNoteStats()
             case "panic":
                 return json(["ok": true, "outputs": monitor.sendPanic()])
             default:
@@ -244,14 +254,35 @@ extension AppDelegate {
                 "log": ["open": logWindow.isVisible],
                 "events": ["open": lastEventsWindow.isVisible],
                 "notes": ["open": lastNotesWindow.isVisible, "notesShown": lastNotesWindow.visibleCount],
+                "stats": ["open": statisticsWindow.isVisible],
             ],
             "events": [
                 "stored": store.events(including: .all).count,
                 "aftertouch": store.count(of: .aftertouch),
             ],
-            "notesCount": notesCount,
+            "stats": statsStatus(at: now),
             "clock": clockStatus,
             "activeSensing": activeSensing.devices(at: now),
+        ]
+    }
+
+    /// The values of the Statistics window; null where nothing was played since the reset.
+    private func statsStatus(at now: Date) -> [String: Any] {
+        let s = noteStats
+        func orNull<T>(_ value: T?) -> Any { value.map { $0 as Any } ?? NSNull() }
+        return [
+            "notesSinceStart": s.totalCount,
+            "notesSinceReset": s.count,
+            "perMinuteAverage": s.count > 0 ? s.averagePerMinute(at: now) : NSNull(),
+            "perMinuteLastMinute": s.perMinute(over: 60, at: now),
+            "perMinuteLast15s": s.perMinute(over: NoteStats.shortWindow, at: now),
+            "perMinutePeak15s": s.peakPerMinute > 0 ? s.peakPerMinute : NSNull(),
+            "secondsSinceFirstNote": orNull(s.firstNoteDate.map { (now.timeIntervalSince($0) * 10).rounded() / 10 }),
+            "lowestNote": orNull(s.lowestNote.map(MIDIFormat.noteName)),
+            "highestNote": orNull(s.highestNote.map(MIDIFormat.noteName)),
+            "averageVelocity": orNull(s.averageVelocity),
+            "softestVelocity": orNull(s.softestVelocity.map(Int.init)),
+            "loudestVelocity": orNull(s.loudestVelocity.map(Int.init)),
         ]
     }
 

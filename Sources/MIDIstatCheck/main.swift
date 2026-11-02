@@ -245,6 +245,59 @@ func messageParts() {
     expect(MIDIFormat.logColumns(of: .stop) == ("Stop", nil, nil))
 }
 
+func noteStats() {
+    let t0 = Date(timeIntervalSince1970: 1000)
+    func at(_ seconds: Double) -> Date { t0.addingTimeInterval(seconds) }
+    let stats = NoteStats()
+    func add(_ seconds: Double, note: UInt8 = 60, velocity: UInt8 = 64) {
+        stats.add(note: note, velocity: velocity, at: at(seconds))
+    }
+    expect(stats.perMinute(at: t0) == 0 && stats.averagePerMinute(at: t0) == 0 && stats.averageVelocity == nil)
+    // A run starts with its first note and is projected while shorter than the window.
+    add(100)
+    expect(stats.perMinute(at: at(100.2)) == 60)  // counted as at least one second
+    for i in 1..<8 { add(100 + Double(i) * 0.25) }  // 8 notes in 2 s
+    expect(stats.perMinute(at: at(102)) == 240)
+    expect(stats.perMinute(over: 15, at: at(102)) == 240)
+    expect(stats.perMinute(at: at(130)) == 16)
+    expect(stats.perMinute(over: 15, at: at(130)) == 0)
+    expect(stats.peakPerMinute == 0)  // projected values are not peaks
+    // Full windows: the notes in the window, scaled to a minute.
+    for i in 0..<41 { add(130 + Double(i)) }  // one per second, 130…170 s
+    expect(stats.perMinute(at: at(170)) == 41)  // the first 8 (100…101.75 s) have expired
+    expect(stats.perMinute(over: 15, at: at(170)) == 60)
+    expect(stats.peakPerMinute == 60)
+    for i in 41..<60 { add(130 + Double(i)) }  // …189 s
+    expect(stats.perMinute(at: at(205)) == 44)  // 146…189 s
+    expect(stats.count == 68 && stats.totalCount == 68)
+    expect(stats.averagePerMinute(at: at(236)) == 30)  // 68 notes in 136 s since the first
+    // A minute without notes ends the run; the next note starts a new one.
+    expect(stats.perMinute(at: at(300)) == 0)
+    add(300); add(301); add(302)
+    expect(stats.perMinute(at: at(303)) == 60)  // 3 notes in 3 s
+    // Velocity and range.
+    add(310, note: 48, velocity: 10)
+    add(311, note: 79, velocity: 127)
+    expect(stats.lowestNote == 48 && stats.highestNote == 79)
+    expect(stats.softestVelocity == 10 && stats.loudestVelocity == 127)
+    expect(stats.averageVelocity == Int((Double(71 * 64 + 10 + 127) / 73).rounded()))
+    // Reset: everything but the total; the run starts with the next note.
+    stats.reset()
+    expect(stats.count == 0 && stats.totalCount == 73 && stats.firstNoteDate == nil && stats.peakPerMinute == 0)
+    expect(stats.lowestNote == nil && stats.averageVelocity == nil && stats.perMinute(at: at(400)) == 0)
+    add(500); add(501)
+    expect(stats.perMinute(at: at(502)) == 60 && stats.averagePerMinute(at: at(502)) == 60)
+    // Many notes: expired times are dropped in batches.
+    for i in 0..<1000 { add(600 + Double(i) * 0.1) }  // 10 per second
+    expect(stats.perMinute(at: at(700.05)) == 599)  // 640.1…699.9 s
+    expect(stats.perMinute(over: 15, at: at(700.05)) == 596)  // 685.1…699.9 s: 149 notes × 4
+    expect(NoteStats.formatDuration(59.9) == "0:59" && NoteStats.formatDuration(3725) == "1:02:05")
+    expect(NoteStats.velocityLevel(0) == 1 && NoteStats.velocityLevel(7) == 1)
+    expect(NoteStats.velocityLevel(8) == 2 && NoteStats.velocityLevel(64) == 9)
+    expect(NoteStats.velocityLevel(120) == 16 && NoteStats.velocityLevel(127) == 16)
+    expect(NoteStats.velocityLevel(255) == 16)
+}
+
 let tests: [(String, () -> Void)] = [
     ("noteOnMatchesSpecExample", noteOnMatchesSpecExample),
     ("noteOnWithZeroVelocityIsNoteOff", noteOnWithZeroVelocityIsNoteOff),
@@ -265,6 +318,7 @@ let tests: [(String, () -> Void)] = [
     ("activeSensingTracker", activeSensingTracker),
     ("alignedColumns", alignedColumns),
     ("messageParts", messageParts),
+    ("noteStats", noteStats),
 ]
 for (name, test) in tests { currentTest = name; test() }
 print(failures == 0 ? "All \(tests.count) checks passed." : "\(failures) failure(s).")
