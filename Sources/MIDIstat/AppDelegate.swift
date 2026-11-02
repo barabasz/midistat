@@ -412,32 +412,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func checkForUpdates() {
         Task { @MainActor in
-            let current = Updater.currentVersion
             do {
-                let release = try await Updater.latestRelease()
+                let check = try await Updater.check()
                 NSApp.activateTakingFocus()
-                guard Updater.isNewer(release.version, than: current) else {
+                guard check.updateAvailable else {
                     let alert = NSAlert()
                     alert.messageText = "You’re up to date"
-                    alert.informativeText = "MIDIstat \(current) is the latest version."
+                    alert.informativeText = "MIDIstat \(check.current) is the latest version."
                     alert.runModal()
                     return
                 }
-                let alert = NSAlert()
-                alert.messageText = "MIDIstat \(release.version) is available"
-                let changes = Updater.changes(in: release.notes)
-                alert.informativeText = "You have version \(current)."
-                    + (changes.isEmpty ? "" : "\n\nChanges:\n\(changes)")
-                    + "\n\nUpgrade downloads the new version, replaces this one and restarts MIDIstat."
-                alert.addButton(withTitle: "Upgrade")
-                alert.addButton(withTitle: "Cancel")
-                if alert.runModal() == .alertFirstButtonReturn {
-                    await upgrade(to: release)
+                if Self.updateAlert(for: check).runModal() == .alertFirstButtonReturn {
+                    await upgrade(to: check.latest)
                 }
             } catch {
                 showUpdateError("Could not check for updates", error, pageURL: nil)
             }
         }
+    }
+
+    /// "MIDIstat x is available": up to 5 changes (newest first, from all releases
+    /// since the installed one), then "…and N more. See all changes" with a link.
+    static func updateAlert(for check: Updater.Check) -> NSAlert {
+        let alert = NSAlert()
+        alert.messageText = "MIDIstat \(check.latest.version) is available"
+        let changes = check.changes.shown.map { "• \($0)" }.joined(separator: "\n")
+        alert.informativeText = "You have version \(check.current)."
+            + (changes.isEmpty ? "" : "\n\nWhat’s new:\n\(changes)")
+
+        // NSAlert's text cannot contain links, so the rest goes into an accessory view.
+        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        let text = NSMutableAttributedString()
+        func add(_ string: String, _ attributes: [NSAttributedString.Key: Any] = [:]) {
+            text.append(NSAttributedString(string: string, attributes: [.font: font].merging(attributes) { $1 }))
+        }
+        if check.changes.more > 0 {
+            add("…and \(check.changes.more) more. ")
+            add("See all changes", [.link: check.allChangesURL])
+            add("\n\n")
+        } else if !check.changes.shown.isEmpty {
+            add("See all changes", [.link: check.allChangesURL])
+            add("\n\n")
+        }
+        add("Upgrade downloads the new version, replaces this one and restarts MIDIstat.",
+            [.foregroundColor: NSColor.secondaryLabelColor])
+
+        let field = NSTextField(labelWithAttributedString: text)
+        field.isSelectable = true               // needed for the link to be clickable
+        field.allowsEditingTextAttributes = true
+        field.preferredMaxLayoutWidth = 260
+        field.frame.size = field.fittingSize
+        alert.accessoryView = field
+
+        alert.addButton(withTitle: "Upgrade")
+        alert.addButton(withTitle: "Cancel")
+        return alert
     }
 
     @MainActor private func upgrade(to release: Updater.Release) async {

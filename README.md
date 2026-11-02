@@ -40,7 +40,7 @@ Click the icon to open the menu. Its first line shows the installed version, e.g
   - **Launch at Login**: start MIDIstat automatically when you log in.
 - **Check for Updates…**: asks GitHub for the latest release.
   - If you have the latest version, a dialog says so.
-  - Otherwise a dialog shows the new version and its changes, with **Upgrade** and **Cancel**. **Upgrade** downloads the new version and checks it: GitHub's SHA-256 checksum, the app identifier, the version and the code signature. It then replaces the installed app in place, keeping your settings, and restarts MIDIstat. If something fails, the old version stays and you can open the release page.
+  - Otherwise a dialog shows the new version and what's new since your version, covering every release you skipped. It lists up to 5 changes, newest first, then *…and N more* with a **See all changes** link to GitHub's comparison of your version with the new one. The buttons are **Upgrade** and **Cancel**. **Upgrade** downloads the new version and checks it: GitHub's SHA-256 checksum, the app identifier, the version and the code signature. It then replaces the installed app in place, keeping your settings, and restarts MIDIstat. If something fails, the old version stays and you can open the release page.
 - **MIDI Panic** (⌘P): sends *All Sound Off*, *Reset All Controllers* and *All Notes Off* on all 16 channels to every MIDI output, to silence hanging notes. It is disabled when there are no MIDI outputs. ⌘P also works while the log window has focus, and so do ⌘L and ⌘N.
 - **Quit MIDIstat** (⌘Q).
 
@@ -104,7 +104,7 @@ $MIDISTAT ctl events 5               # the last 5 events
 |---|---|
 | `ver` | The installed version and build number. |
 | `devices` | The MIDI inputs (and whether MIDIstat is listening to each) and outputs that MIDIstat sees. |
-| `updates` | Checks GitHub for a newer release. Reports it, does not install it. |
+| `updates` | Checks GitHub for a newer release: the latest version, all changes since the installed one and a link to the full comparison. Does not install anything. |
 | `status` | Indicator state, selected input, available inputs and outputs, all options, which windows are open, event counts. |
 | `events [N]` | The last N events (default 10, max 1000) as shown in the lists: time, device, channel, message. |
 | `set <option> <on\|off\|toggle>` | Options: `timestamp`, `device-name`, `channel`, `clock`, `aftertouch`, `notes-on-top`, `notes-xlarge`, `launch-at-login`. |

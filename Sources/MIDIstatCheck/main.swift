@@ -152,6 +152,43 @@ func storeTracksAppendsAndClears() {
     expect(store.generation == generation + 1 && store.appendedCount(including: []) == 0)
 }
 
+func releaseVersions() {
+    expect(ReleaseNotes.isNewer("0.6.0", than: "0.5.0"))
+    expect(ReleaseNotes.isNewer("v0.10.0", than: "0.9.1"))
+    expect(ReleaseNotes.isNewer("1.0", than: "0.9.9"))
+    expect(!ReleaseNotes.isNewer("0.6.2", than: "v0.6.2"))
+    expect(!ReleaseNotes.isNewer("0.5.0", than: "0.6.0"))
+}
+
+private func notes(_ changes: [String]) -> String {
+    "## Install\n\n1. Download\n   - nested install bullet\n\n## Changes\n\n"
+        + changes.map { "- \($0) (abc1234)" }.joined(separator: "\n")
+        + "\n\n**Full diff**: https://example.com\n"
+}
+
+func releaseNotesChanges() {
+    expect(ReleaseNotes.changes(in: notes(["Add A", "Version 0.6.1", "Fix B"])) == ["Add A", "Fix B"])
+    expect(ReleaseNotes.changes(in: notes(["Fix (issue 12) in parser"])) == ["Fix (issue 12) in parser"])
+    expect(ReleaseNotes.changes(in: "## Install\n- not a change\n") == [])  // e.g. v0.4.0
+}
+
+func releaseNotesSummary() {
+    let releases = [
+        (version: "0.6.1", notes: notes(["c1", "Version 0.6.1"])),
+        (version: "0.6.3", notes: notes(["e1", "e2", "e3", "Version 0.6.3"])),
+        (version: "0.6.0", notes: notes(["old"])),
+        (version: "0.6.2", notes: notes(["d1", "d2", "Version 0.6.2"])),
+    ]
+    // Newest release first, newest change first within a release; installed and older excluded.
+    let s = ReleaseNotes.summary(of: releases, since: "0.6.0", limit: 5)
+    expect(s.shown == ["e3", "e2", "e1", "d2", "d1"] && s.more == 1)
+    expect(ReleaseNotes.summary(of: releases, since: "0.6.2", limit: 5) == .init(shown: ["e3", "e2", "e1"], more: 0))
+    expect(ReleaseNotes.summary(of: releases, since: "0.6.3").shown.isEmpty)
+    let many = [(version: "1.0.0", notes: notes((1...100).map { "change \($0)" }))]
+    let m = ReleaseNotes.summary(of: many, since: "0.6.2", limit: 5)
+    expect(m.shown.count == 5 && m.more == 95 && m.shown.first == "change 100")
+}
+
 let tests: [(String, () -> Void)] = [
     ("noteOnMatchesSpecExample", noteOnMatchesSpecExample),
     ("noteOnWithZeroVelocityIsNoteOff", noteOnWithZeroVelocityIsNoteOff),
@@ -165,6 +202,9 @@ let tests: [(String, () -> Void)] = [
     ("storeFilters", storeFilters),
     ("storeIsCapped", storeIsCapped),
     ("storeTracksAppendsAndClears", storeTracksAppendsAndClears),
+    ("releaseVersions", releaseVersions),
+    ("releaseNotesChanges", releaseNotesChanges),
+    ("releaseNotesSummary", releaseNotesSummary),
 ]
 for (name, test) in tests { currentTest = name; test() }
 print(failures == 0 ? "All \(tests.count) checks passed." : "\(failures) failure(s).")

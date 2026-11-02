@@ -10,7 +10,7 @@ extension AppDelegate {
         "ver                            the MIDIstat version",
         "status                         the whole state: indicator, input, options, windows, event counts",
         "devices                        MIDI inputs and outputs seen by MIDIstat",
-        "updates                        check GitHub for a newer release (does not install it)",
+        "updates                        check GitHub for a newer release and list the changes (does not install)",
         "events [N]                     the last N events as shown in the lists (default 10, max 1000)",
         "set <option> <on|off|toggle>   options: timestamp, device-name, channel, clock, aftertouch,",
         "                               notes-on-top, notes-xlarge, launch-at-login",
@@ -106,19 +106,20 @@ extension AppDelegate {
     /// Commands that wait for the network; they run on the control thread, not the main thread.
     func handleSlowControlCommand(_ request: String) -> String? {
         guard request.split(separator: " ").first?.lowercased() == "updates" else { return nil }
-        final class Box { var result: Result<Updater.Release, Error>? }
+        final class Box { var result: Result<Updater.Check, Error>? }
         let box = Box(), done = DispatchSemaphore(value: 0)
         Task.detached {
-            do { box.result = .success(try await Updater.latestRelease()) } catch { box.result = .failure(error) }
+            do { box.result = .success(try await Updater.check(limit: 1000)) } catch { box.result = .failure(error) }
             done.signal()
         }
         done.wait()
-        let current = Updater.currentVersion
         switch box.result {
-        case let .success(release):
-            return json(["ok": true, "current": current, "latest": release.version,
-                         "updateAvailable": Updater.isNewer(release.version, than: current),
-                         "releasePage": release.pageURL.absoluteString])
+        case let .success(check):
+            return json(["ok": true, "current": check.current, "latest": check.latest.version,
+                         "updateAvailable": check.updateAvailable,
+                         "changes": check.changes.shown,
+                         "allChanges": check.allChangesURL.absoluteString,
+                         "releasePage": check.latest.pageURL.absoluteString])
         case let .failure(error):
             return json(["ok": false, "error": "could not check for updates: \(error.localizedDescription)"])
         case nil:

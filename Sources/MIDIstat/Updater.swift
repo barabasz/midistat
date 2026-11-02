@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import MIDIstatCore
 
 /// Checks GitHub Releases for a newer version and installs it in place.
 ///
@@ -13,10 +14,22 @@ enum Updater {
 
     struct Release {
         let version: String  // "0.6.0"
+        let tag: String      // "v0.6.0"
         let pageURL: URL
-        let zipURL: URL
+        let zipURL: URL?
         let sha256: String?  // hex, from the asset's "digest"
         let notes: String
+    }
+
+    /// The result of an update check: the newest release, and what changed
+    /// since the installed version (across all releases in between).
+    struct Check {
+        let latest: Release
+        let current: String
+        let changes: ReleaseNotes.Summary
+        /// GitHub's comparison page from the installed version to the latest one.
+        let allChangesURL: URL
+        var updateAvailable: Bool { ReleaseNotes.isNewer(latest.version, than: current) }
     }
 
     struct UpdateError: Error, LocalizedError {
@@ -28,59 +41,52 @@ enum Updater {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
 
-    /// Numeric comparison of dotted versions: 0.10.0 > 0.9.1.
-    static func isNewer(_ candidate: String, than current: String) -> Bool {
-        func parts(_ v: String) -> [Int] {
-            v.trimmingCharacters(in: CharacterSet(charactersIn: "vV")).split(separator: ".").map { Int($0) ?? 0 }
-        }
-        let a = parts(candidate), b = parts(current)
-        for i in 0..<max(a.count, b.count) {
-            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
-            if x != y { return x > y }
-        }
-        return false
-    }
-
     // MARK: - Checking
 
-    static func latestRelease() async throws -> Release {
-        var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!)
+    /// One request: all published releases (newest first), with their notes.
+    static func check(limit: Int = 5) async throws -> Check {
+        var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=100")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("MIDIstat/\(currentVersion)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 15
         let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200,
-              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tag = json["tag_name"] as? String,
-              let page = (json["html_url"] as? String).flatMap(URL.init(string:)),
-              let assets = json["assets"] as? [[String: Any]]
+              let list = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else { throw UpdateError("GitHub did not return release information.") }
 
-        let version = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
-        guard let asset = assets.first(where: { ($0["name"] as? String) == "MIDIstat-\(version).zip" }),
-              let zip = (asset["browser_download_url"] as? String).flatMap(URL.init(string:))
-        else { throw UpdateError("Release \(tag) has no MIDIstat-\(version).zip.") }
-        let digest = (asset["digest"] as? String).flatMap { $0.hasPrefix("sha256:") ? String($0.dropFirst(7)) : nil }
-        return Release(version: version, pageURL: page, zipURL: zip, sha256: digest,
-                       notes: json["body"] as? String ?? "")
+        let releases = list.compactMap(release(from:))
+            .sorted { ReleaseNotes.isNewer($0.version, than: $1.version) }
+        guard let latest = releases.first(where: { $0.zipURL != nil }) else {
+            throw UpdateError("No downloadable MIDIstat release was found.")
+        }
+        let current = currentVersion
+        let summary = ReleaseNotes.summary(of: releases.filter { !ReleaseNotes.isNewer($0.version, than: latest.version) }
+                                                       .map { ($0.version, $0.notes) },
+                                           since: current, limit: limit)
+        let compare = URL(string: "https://github.com/\(repository)/compare/v\(current)...\(latest.tag)")
+        let all = current == "0.0.0" ? URL(string: "https://github.com/\(repository)/releases") : compare
+        return Check(latest: latest, current: current, changes: summary, allChangesURL: all ?? latest.pageURL)
     }
 
-    /// The "## Changes" list from the release notes, for the update dialog.
-    static func changes(in notes: String, limit: Int = 12) -> String {
-        guard let start = notes.range(of: "## Changes") else { return "" }
-        let lines = notes[start.upperBound...].split(separator: "\n").map(String.init)
-            .prefix { !$0.hasPrefix("## ") && !$0.hasPrefix("**Full diff") }
-            .filter { $0.hasPrefix("- ") }
-            .map { $0.replacingOccurrences(of: #" \([0-9a-f]{7,}\)$"#, with: "", options: .regularExpression) }
-        let shown = (lines.count > limit ? ["…"] : []) + lines.suffix(limit)
-        return shown.joined(separator: "\n")
+    private static func release(from json: [String: Any]) -> Release? {
+        guard json["draft"] as? Bool != true, json["prerelease"] as? Bool != true,
+              let tag = json["tag_name"] as? String,
+              let page = (json["html_url"] as? String).flatMap(URL.init(string:))
+        else { return nil }
+        let version = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+        let asset = (json["assets"] as? [[String: Any]])?.first { ($0["name"] as? String) == "MIDIstat-\(version).zip" }
+        let digest = (asset?["digest"] as? String).flatMap { $0.hasPrefix("sha256:") ? String($0.dropFirst(7)) : nil }
+        return Release(version: version, tag: tag, pageURL: page,
+                       zipURL: (asset?["browser_download_url"] as? String).flatMap(URL.init(string:)),
+                       sha256: digest, notes: json["body"] as? String ?? "")
     }
 
     // MARK: - Installing
 
     /// Downloads and verifies the release; returns the unpacked MIDIstat.app.
     static func downloadAndVerify(_ release: Release, bundleIdentifier: String) async throws -> URL {
-        var request = URLRequest(url: release.zipURL)
+        guard let zipURL = release.zipURL else { throw UpdateError("Release \(release.tag) has no download.") }
+        var request = URLRequest(url: zipURL)
         request.setValue("MIDIstat/\(currentVersion)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 60
         let (download, response) = try await URLSession.shared.download(for: request)
