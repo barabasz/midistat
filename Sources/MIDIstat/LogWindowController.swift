@@ -13,6 +13,10 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
     private(set) var settings: Settings
     private let saveSettings: (Settings) -> Void
     private let onClear: () -> Void
+    /// Names of the connected MIDI inputs, so the Device column fits them before any event arrives.
+    private let deviceNames: () -> [String]
+    /// The columns are fitted the first time the window is shown in a session.
+    private var columnsFitted = false
 
     private let tableView = LogTableView()
     private let scrollView = NSScrollView()
@@ -39,22 +43,41 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
     /// keeps the log visually live (1–2 new lines at a time) at moderate CPU.
     private static let maxUpdatesPerSecond = 10.0
 
-    private static let timeFormatter: DateFormatter = {
+    fileprivate static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss.SSS"
         return f
     }()
 
     private enum Column: String, CaseIterable {
-        case time = "Time", source = "Device", channel = "Ch", message = "Message", value = "Value"
+        case time = "Time", source = "Device", channel = "Ch", message = "Message", note = "Note", value = "Value"
 
         var width: CGFloat {
             switch self {
             case .time: return 125
             case .source: return 160
             case .channel: return 34
-            case .message: return 300
+            case .message: return 260
+            case .note: return 50
             case .value: return 70
+            }
+        }
+
+        var font: NSFont {
+            self == .source ? .systemFont(ofSize: NSFont.systemFontSize)
+                : .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        }
+
+        var isRightAligned: Bool { self == .channel || self == .value }
+
+        func text(of event: MIDIEvent) -> String {
+            switch self {
+            case .time: return LogWindowController.timeFormatter.string(from: event.date)
+            case .source: return event.source ?? ""
+            case .channel: return event.channel.map(String.init) ?? ""
+            case .message: return MIDIFormat.logColumns(of: event.kind).message
+            case .note: return MIDIFormat.logColumns(of: event.kind).note ?? ""
+            case .value: return MIDIFormat.logColumns(of: event.kind).value ?? ""
             }
         }
     }
@@ -62,11 +85,13 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
     init(store: EventStore,
          settings: Settings,
          saveSettings: @escaping (Settings) -> Void,
+         deviceNames: @escaping () -> [String],
          onClear: @escaping () -> Void) {
         self.store = store
         self.settings = settings
         self.saveSettings = saveSettings
         self.onClear = onClear
+        self.deviceNames = deviceNames
 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 860, height: 480),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -122,6 +147,8 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
         onTopCheckbox.target = self
         onTopCheckbox.action = #selector(toggleAlwaysOnTop(_:))
 
+        let resetColumnsButton = NSButton(title: "Reset Columns", target: self, action: #selector(resetColumns))
+        resetColumnsButton.toolTip = "Put the columns back in their order and fit their widths to the content."
         let clearButton = NSButton(title: "Clear Log", target: self, action: #selector(clearLog))
         let closeButton = NSButton(title: "Close", target: self, action: #selector(closeWindow))
         // Esc closes the window via cancelOperation(_:), unless the filter field is being edited.
@@ -137,7 +164,7 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let bar = NSStackView(views: [aftertouchCheckbox, onTopCheckbox, countLabel, spacer, clearButton, closeButton])
+        let bar = NSStackView(views: [aftertouchCheckbox, onTopCheckbox, countLabel, spacer, resetColumnsButton, clearButton, closeButton])
         bar.orientation = .horizontal
         bar.spacing = 12
         bar.edgeInsets = NSEdgeInsets(top: 10, left: 16, bottom: 12, right: 16)
@@ -171,6 +198,12 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
     func show(takeFocus: Bool = true) {
         guard let window else { return }
         reload(scrollToEnd: true)
+        if !columnsFitted {
+            // The default widths may not fit the (restored) window: fit them, as Reset Columns does.
+            columnsFitted = true
+            window.contentView?.layoutSubtreeIfNeeded()
+            resetColumns()
+        }
         DesktopReturn.cancel(window)  // opened explicitly: show it here
         // A menu bar app is usually not the active app: bring the window above
         // other apps' windows explicitly and take the focus.
@@ -278,9 +311,9 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
 
     /// The text of all columns of a row, as searched by the filter.
     private static func searchText(_ event: MIDIEvent) -> String {
-        let parts = MIDIFormat.parts(of: event.kind)
+        let columns = MIDIFormat.logColumns(of: event.kind)
         return [timeFormatter.string(from: event.date), event.source ?? "",
-                event.channel.map { "ch \($0)" } ?? "", parts.message, parts.value?.text ?? ""]
+                event.channel.map { "ch \($0)" } ?? "", columns.message, columns.note ?? "", columns.value ?? ""]
             .joined(separator: " ").lowercased()
     }
 
@@ -343,10 +376,7 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
 
     private func copySelection() {
         let lines = tableView.selectedRowIndexes.compactMap { event(atRow: $0) }.map { event in
-            [Self.timeFormatter.string(from: event.date), event.source ?? "",
-             event.channel.map(String.init) ?? "", MIDIFormat.parts(of: event.kind).message,
-             MIDIFormat.parts(of: event.kind).value?.text ?? ""]
-                .joined(separator: "\t")
+            Column.allCases.map { $0.text(of: event) }.joined(separator: "\t")
         }
         guard !lines.isEmpty else { return }
         NSPasteboard.general.clearContents()
@@ -364,23 +394,64 @@ final class LogWindowController: NSWindowController, NSWindowDelegate, NSTableVi
             let f = NSTextField(labelWithString: "")
             f.identifier = identifier
             f.lineBreakMode = .byTruncatingTail
-            f.font = column == .source ? .systemFont(ofSize: NSFont.systemFontSize)
-                : .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            if column == .channel || column == .value { f.alignment = .right }
+            f.font = column.font
+            if column.isRightAligned { f.alignment = .right }
             return f
         }()
         guard let event = event(atRow: row) else {
             field.stringValue = ""
             return field
         }
-        switch column {
-        case .time: field.stringValue = Self.timeFormatter.string(from: event.date)
-        case .source: field.stringValue = event.source ?? ""
-        case .channel: field.stringValue = event.channel.map(String.init) ?? ""
-        case .message: field.stringValue = MIDIFormat.parts(of: event.kind).message
-        case .value: field.stringValue = MIDIFormat.parts(of: event.kind).value?.text ?? ""
-        }
+        field.stringValue = column.text(of: event)
         return field
+    }
+
+    // MARK: - Columns
+
+    /// Puts the columns back in their default order and fits each to its widest
+    /// content among the rows shown, its title and the widest values expected. Space left over goes to
+    /// the message column, so the table fills the window.
+    @objc private func resetColumns() {
+        for (index, column) in Column.allCases.enumerated() {
+            let current = tableView.column(withIdentifier: NSUserInterfaceItemIdentifier(column.rawValue))
+            if current >= 0, current != index { tableView.moveColumn(current, toColumn: index) }
+        }
+        // Distinct texts only: the log can hold 100,000 rows, but few different strings per column.
+        var texts = Dictionary(uniqueKeysWithValues: Column.allCases.map { ($0, Set<String>()) })
+        for row in 0..<rowCount {
+            guard let event = event(atRow: row) else { continue }
+            for column in Column.allCases where column != .time { texts[column]?.insert(column.text(of: event)) }
+        }
+        // Also the widest values that may come, so that a short or empty log leaves room for them.
+        texts[.time] = ["00:00:00.000"]
+        texts[.source]?.formUnion(deviceNames())
+        texts[.channel]?.insert("16")
+        texts[.note]?.insert("C#-1")
+        texts[.value]?.insert("-8192")
+        let padding: CGFloat = 16  // cell insets and the column separator
+        var widths: [Column: CGFloat] = [:]
+        for column in Column.allCases {
+            let header = tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(column.rawValue))?.headerCell
+            let headerFont = header?.font ?? .systemFont(ofSize: NSFont.systemFontSize)
+            let title = (column.rawValue as NSString).size(withAttributes: [.font: headerFont]).width
+            let content = texts[column, default: []].map {
+                ($0 as NSString).size(withAttributes: [.font: column.font]).width
+            }.max() ?? 0
+            widths[column] = ceil(max(title, content)) + padding
+        }
+        // Each column also takes the spacing between cells.
+        let available = scrollView.contentView.bounds.width
+            - tableView.intercellSpacing.width * CGFloat(Column.allCases.count)
+        let total = widths.values.reduce(0, +)
+        if total < available { widths[.message, default: 0] += floor(available - total) }
+        // Set the widths without the table redistributing them after each change.
+        let style = tableView.columnAutoresizingStyle
+        tableView.columnAutoresizingStyle = .noColumnAutoresizing
+        for column in Column.allCases {
+            tableView.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(column.rawValue))?.width = widths[column] ?? column.width
+        }
+        tableView.columnAutoresizingStyle = style
+        tableView.sizeToFit()
     }
 }
 

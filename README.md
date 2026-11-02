@@ -70,7 +70,8 @@ Each window has its own options and its own **Always on Top** checkbox. With **A
 **Show Full Log** opens a resizable window (it can also be zoomed or made full screen) with a table of every message since MIDIstat started, or since the log was last cleared:
 
 - a **filter** field at the top (⌘F). Type one or more words, and only rows containing all of them stay, in any column and ignoring case. For example, `d4 on` shows Note On events of D4, `xkey 064` events from the Xkey with controller or note 064, `ch 2` events on channel 2. New events that match keep appearing;
-- columns **Time** (`HH:mm:ss.SSS`), **Device**, **Ch**, **Message** and **Value** (velocity, controller value, pressure, pitch bend; empty for messages without one);
+- columns **Time** (`HH:mm:ss.SSS`), **Device**, **Ch**, **Message** (e.g. `Note 067 On`), **Note** (the note's name, e.g. `G4`, for Note On/Off and Poly Pressure; empty otherwise) and **Value** (velocity, controller value, pressure, pitch bend; empty for messages without one). Columns can be resized and dragged to another place;
+- **Reset Columns** puts the columns back in this order and fits each to its widest content, giving the rest of the width to Message. The same happens when the window is first opened after MIDIstat starts;
 - **Aftertouch** and **Always on Top** checkboxes;
 - an event counter, including how many messages are hidden;
 - **Clear Log** clears the history: the log, Last Events and the menu;

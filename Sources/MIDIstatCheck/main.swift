@@ -236,6 +236,13 @@ func messageParts() {
     let program = MIDIFormat.parts(of: .programChange(program: 5))
     expect(program.message == "Program Change 005" && program.value == nil)
     expect(MIDIFormat.description(of: .controlChange(controller: 64, value: 127)) == "Control Change 064 (Sustain), value: 127")
+    let logNote = MIDIFormat.logColumns(of: .noteOn(note: 67, velocity: 93))
+    expect(logNote.message == "Note 067 On" && logNote.note == "G4" && logNote.value == "93")
+    let logPressure = MIDIFormat.logColumns(of: .polyPressure(note: 61, value: 40))
+    expect(logPressure.message == "Poly Pressure 061" && logPressure.note == "C#4" && logPressure.value == "40")
+    let logCC = MIDIFormat.logColumns(of: .controlChange(controller: 64, value: 127))
+    expect(logCC.message == "Control Change 064 (Sustain)" && logCC.note == nil && logCC.value == "127")
+    expect(MIDIFormat.logColumns(of: .stop) == ("Stop", nil, nil))
 }
 
 let tests: [(String, () -> Void)] = [

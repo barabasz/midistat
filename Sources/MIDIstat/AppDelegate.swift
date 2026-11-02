@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.defaults.set(settings.aftertouch, forKey: Defaults.logShowAftertouch)
             self.defaults.set(settings.alwaysOnTop, forKey: Defaults.logAlwaysOnTop)
         },
+        deviceNames: { [unowned self] in self.monitor.sources.map(\.name) },
         onClear: { [unowned self] in self.clearLog() })
 
     lazy var lastEventsWindow: LastEventsWindowController = {

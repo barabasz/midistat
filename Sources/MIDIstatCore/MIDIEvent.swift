@@ -138,6 +138,20 @@ public enum MIDIFormat {
         }
     }
 
+    /// The columns of the log window: the message without the note name, the
+    /// note name (only for messages about a note) and the value, e.g.
+    /// `Note 079 On`, `G5`, `93`.
+    public static func logColumns(of kind: MIDIEventKind) -> (message: String, note: String?, value: String?) {
+        switch kind {
+        case let .noteOn(note, velocity): return ("Note \(pad3(note)) On", noteName(note), "\(velocity)")
+        case let .noteOff(note, velocity): return ("Note \(pad3(note)) Off", noteName(note), "\(velocity)")
+        case let .polyPressure(note, value): return ("Poly Pressure \(pad3(note))", noteName(note), "\(value)")
+        default:
+            let (message, value) = parts(of: kind)
+            return (message, nil, value?.text)
+        }
+    }
+
     /// e.g. `Note 079 On (G5), velocity: 93`
     public static func description(of kind: MIDIEventKind) -> String {
         let (message, value) = parts(of: kind)
