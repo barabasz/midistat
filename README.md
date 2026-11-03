@@ -18,6 +18,8 @@ MIDIstat is **free and open source, and always will be**. No account, no ads, no
 
 ## Why MIDIstat
 
+<img src="img/popup.webp" align="right" width="35%" alt="The menu">
+
 - **Instant answer.** One glance at the menu bar tells you whether MIDI is arriving.
 - **See every message.** The menu shows the last event live: device, channel, note, velocity, controller, pitch bend, aftertouch and more.
 - **Floating windows you place anywhere.** Four small windows show the last events, the notes you play, practice statistics and the full log. Arrange them around your screen, keep them on top of every app and every desktop, even over a full-screen DAW, or let them behave like ordinary windows.
@@ -28,8 +30,6 @@ MIDIstat is **free and open source, and always will be**. No account, no ads, no
 - **Safe one-click updates.** MIDIstat shows what's new, then downloads, verifies and installs the update for you.
 
 ## The menu
-
-![The MIDIstat menu](img/popup.webp)
 
 Click the mark to see the last MIDI event, MIDI Clock and Active Sensing while they arrive, and to open the windows, choose the MIDI input (all inputs, or just one), switch Launch at Login and the appearance (Auto, Light, Dark), check for updates or send MIDI Panic.
 
